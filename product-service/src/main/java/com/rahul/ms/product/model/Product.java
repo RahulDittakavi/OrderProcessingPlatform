@@ -8,6 +8,9 @@ import lombok.NoArgsConstructor;
 import lombok.Builder;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 @Document(collection = "products")
 @Data
@@ -17,8 +20,12 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class Product {
     @Id
     private String id;
+    @NotBlank(message = "Product name is required")
     private String name;
+    @NotBlank(message = "Product description is required")
     private String description;
+    @NotNull(message = "Product price is required")
+    @Positive(message = "Product price must be a positive value")
     private BigDecimal price;
 
 }
