@@ -1,6 +1,7 @@
 package com.rahul.ms.order.service;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -39,6 +40,17 @@ public class OrderService {
         savedOrder.getQuantity(),
         savedOrder.getPrice()
         );
+    }
+
+    public List<OrderResponse> getAllOrders() {
+        var orders = orderRepository.findAll();
+        return orders.stream().map(order-> new OrderResponse(
+            order.getId(),
+            order.getOrderNumber(),
+            order.getProductId(),
+            order.getQuantity(),
+            order.getPrice()
+        )).toList();
     }
 
 
