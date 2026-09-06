@@ -21,7 +21,8 @@ public class OrderService {
 
     public OrderResponse placeOrder(OrderRequest orderRequest) {
         // Fetch product details from Product Service
-        var productResponse = productClient.getProductById(orderRequest.productId());
+        var productResponse = productClient.getProductById(orderRequest.productId())
+                .orElseThrow(() -> new RuntimeException("Product not found with ID: " + orderRequest.productId()));
 
         // Create and save the order
         

@@ -1,0 +1,38 @@
+services:
+  product-mongodb:
+    image: mongo:latest
+    container_name: product-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: product-service
+    volumes:
+      - product_mongo_data:/data/db
+    networks:
+      - platform-network
+
+  order-mongodb:
+    image: mongo:latest
+    container_name: order-mongodb
+    restart: always
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: order-service
+    volumes:
+      - order_mongo_data:/data/db
+    networks:
+      - platform-network
+
+volumes:
+  product_mongo_data:
+  order_mongo_data:
+
+networks:
+  platform-network:
+    driver: bridge
