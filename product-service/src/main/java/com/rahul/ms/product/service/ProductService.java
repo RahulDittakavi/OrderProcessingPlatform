@@ -1,6 +1,7 @@
 package com.rahul.ms.product.service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.rahul.ms.product.dto.ProductRequest;
@@ -82,5 +83,10 @@ public class ProductService {
 
         productRepository.delete(product);
         log.info("Product {} is deleted", product.getId());
+    }
+
+    public Optional<ProductResponse> getProductFallback(String productId, Throwable throwable) {
+        log.error("Fallback triggered for productId: {}. Downstream unavailable: {}", productId, throwable.getMessage());
+        return Optional.empty();
     }
 }

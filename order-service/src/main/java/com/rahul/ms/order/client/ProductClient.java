@@ -17,16 +17,17 @@ public class ProductClient {
     private static final Logger log = LoggerFactory.getLogger(ProductClient.class);
     private final RestClient restClient;
 
-    public ProductClient(@Value("${product.service.url:http://localhost:8080}") String productServiceUrl) {
-    this.restClient = RestClient.builder()
-            .baseUrl(productServiceUrl)
-            .build();
-}
+    public ProductClient(RestClient.Builder restClientBuilder,
+                         @Value("${product.service.url:http://product-service}") String productServiceUrl) {
+        this.restClient = restClientBuilder
+                .baseUrl(productServiceUrl)
+                .build();
+    }
 
     @CircuitBreaker(name = "productService", fallbackMethod = "getProductFallback")
     @Retry(name = "productService")
     public Optional<ProductResponse> getProductById(String productId) {
-        log.info("Calling product-service for productId: {}", productId);
+        log.info("Calling product-service via Eureka for productId: {}", productId);
         ProductResponse response = restClient.get()
                 .uri("/api/products/{id}", productId)
                 .retrieve()
@@ -34,9 +35,8 @@ public class ProductClient {
         return Optional.ofNullable(response);
     }
 
-    // Fallback signature must match original method + Throwable as the last argument
     public Optional<ProductResponse> getProductFallback(String productId, Throwable throwable) {
-        log.error("Fallback triggered for productId: {}. Reason: {}", productId, throwable.getMessage());
+        log.error("Fallback triggered for productId: {}. Downstream unavailable: {}", productId, throwable.getMessage());
         return Optional.empty();
     }
 }

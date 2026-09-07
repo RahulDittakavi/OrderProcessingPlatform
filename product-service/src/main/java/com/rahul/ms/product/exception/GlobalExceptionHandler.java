@@ -19,10 +19,15 @@ import com.rahul.ms.product.dto.ErrorResponse;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ProductNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleProductNotFoundException(ProductNotFoundException ex) {
-        log.warn("Product not found: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
-    }
+public ResponseEntity<ErrorResponse> handleProductNotFoundException(ProductNotFoundException ex) {
+    ErrorResponse error = new ErrorResponse(
+            LocalDateTime.now(),
+            HttpStatus.NOT_FOUND.value(),
+            "Not Found",
+            ex.getMessage(), null
+    );
+    return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
+}
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
