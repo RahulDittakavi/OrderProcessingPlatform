@@ -28,10 +28,22 @@ services:
       - order_mongo_data:/data/db
     networks:
       - platform-network
-
+  
+  inventory-db:
+    image: postgres:16-alpine
+    container_name: inventory-db
+    environment:
+      POSTGRES_DB: inventory_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - inventory_data:/var/lib/postgresql/data
 volumes:
   product_mongo_data:
   order_mongo_data:
+  inventory_data:
 
 networks:
   platform-network:
