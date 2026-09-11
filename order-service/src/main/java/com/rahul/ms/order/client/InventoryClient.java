@@ -35,4 +35,17 @@ public class InventoryClient {
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<InventoryResponse>>() {});
     }
+
+    public void reduceStock(String skuCode, int quantity) {
+        String uri = UriComponentsBuilder.fromUriString(inventoryServiceUrl + "/api/inventory/reduce-stock")
+                .queryParam("skuCode", skuCode)
+                .queryParam("quantity", quantity)
+                .toUriString();
+
+        restClientBuilder.build()
+        .put()
+        .uri(uri)
+        .retrieve()
+        .toBodilessEntity();
+    }
 }

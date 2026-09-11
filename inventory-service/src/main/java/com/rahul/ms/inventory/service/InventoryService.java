@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.rahul.ms.inventory.dto.InventoryResponse;
+import com.rahul.ms.inventory.entity.Inventory;
 import com.rahul.ms.inventory.repository.InventoryRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -47,4 +48,25 @@ public class InventoryService {
                         .availableQuantity(0)
                         .build());
     }
+   
+    @Transactional
+public void reduceStock(String skuCode, int quantity) {
+    log.info("Reducing stock for skuCode: {} by quantity: {}", skuCode, quantity);
+
+    Inventory inventory = inventoryRepository.findBySkuCode(skuCode)
+            .orElseThrow(() -> {
+                log.warn("Inventory not found for skuCode: {}", skuCode);
+                return new IllegalArgumentException("Inventory not found for skuCode: " + skuCode);
+            });
+
+    if (inventory.getQuantity() < quantity) {
+        log.warn("Insufficient stock for skuCode: {}. Available: {}, Requested: {}", 
+                skuCode, inventory.getQuantity(), quantity);
+        throw new IllegalArgumentException("Insufficient stock for skuCode: " + skuCode);
+    }
+
+    inventory.setQuantity(inventory.getQuantity() - quantity);
+    inventoryRepository.save(inventory);
+    log.info("Stock reduced successfully for skuCode: {}. Remaining: {}", skuCode, inventory.getQuantity());
 }
+    }

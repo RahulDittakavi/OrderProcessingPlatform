@@ -42,7 +42,7 @@ public class OrderService {
         if (!isStockAvailable) {
             throw new IllegalArgumentException("Product is out of stock or insufficient quantity for ID: " + orderRequest.productId());
         }
-
+        
         // 3. Create and save the order
         var order = Order.builder()
                 .orderNumber(UUID.randomUUID().toString())
@@ -52,7 +52,7 @@ public class OrderService {
                 .build();
 
         var savedOrder = orderRepository.save(order);
-
+        inventoryClient.reduceStock(orderRequest.productId(), orderRequest.quantity());
         return new OrderResponse(
                 savedOrder.getId(),
                 savedOrder.getOrderNumber(),
