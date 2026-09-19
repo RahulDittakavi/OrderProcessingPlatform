@@ -49,7 +49,7 @@ public class ProductService {
 
     public ProductResponse getProductById(String id) {
         Product product = productRepository.findById(id)
-                        .orElseThrow(() -> new RuntimeException("Product not found"));
+                                                .orElseThrow(() -> new ProductNotFoundException("Product not found: " + id));
         return new ProductResponse(
                 product.getId(),
                 product.getName(),
@@ -60,7 +60,7 @@ public class ProductService {
 
     public ProductResponse updateProduct(String id, ProductRequest productRequest) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new ProductNotFoundException("Product not found: " + id));
 
         product.setName(productRequest.name());
         product.setDescription(productRequest.description());

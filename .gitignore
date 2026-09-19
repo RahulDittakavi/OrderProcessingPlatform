@@ -1,0 +1,7 @@
+logs/
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+order-service/order-data/
+product-service/data/
+*.log
+.env

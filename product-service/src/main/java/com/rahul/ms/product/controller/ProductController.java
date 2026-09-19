@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/products")
@@ -37,7 +38,7 @@ public class ProductController {
         @ApiResponse(responseCode = "201", description = "Product created successfully"),
         @ApiResponse(responseCode = "400", description = "Invalid product request payload")
     })
-    public ProductResponse createProduct(@RequestBody ProductRequest productRequest) {
+    public ProductResponse createProduct(@RequestBody @Valid ProductRequest productRequest) {
         return productService.createProduct(productRequest);
     }
 
@@ -73,7 +74,7 @@ public class ProductController {
     public ProductResponse updateProduct(
             @Parameter(description = "Unique identifier of the product to update", example = "64f1a2b3c4d5e6f7a8b9c0d1")
             @PathVariable String id,
-            @RequestBody ProductRequest productRequest) {
+            @RequestBody @Valid ProductRequest productRequest) {
         return productService.updateProduct(id, productRequest);
     }
 

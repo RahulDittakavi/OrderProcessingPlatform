@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.validation.annotation.Validated;
 
 import com.rahul.ms.inventory.dto.InventoryResponse;
 import com.rahul.ms.inventory.service.InventoryService;
@@ -17,6 +20,7 @@ import com.rahul.ms.inventory.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 
 @RestController
+@Validated
 @RequestMapping("/api/inventory")
 @RequiredArgsConstructor
 public class InventoryController {
@@ -39,7 +43,8 @@ public class InventoryController {
 
     @PutMapping("/reduce-stock")
     @ResponseStatus(HttpStatus.OK)
-    public void reduceStock(@RequestParam("skuCode") String skuCode, @RequestParam("quantity") int quantity) {
+    public void reduceStock(@RequestParam("skuCode") @NotBlank String skuCode,
+                            @RequestParam("quantity") @Positive int quantity) {
         inventoryService.reduceStock(skuCode, quantity);
     }
 }

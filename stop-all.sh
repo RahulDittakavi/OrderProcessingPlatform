@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 
-echo "Stopping running Spring Boot services..."
-pkill -f "inventory-service" || true
-pkill -f "order-service" || true
-pkill -f "product-service" || true
-pkill -f "discovery-server" || true
-pkill -f "api-gateway" || true
-pkill -f "spring-boot:run" || true
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PID_FILE="$ROOT_DIR/logs/service-pids"
+
+echo "Stopping project Spring Boot services..."
+if [[ -f "$PID_FILE" ]]; then
+	while read -r pid; do
+		[[ -z "$pid" ]] || kill "$pid" 2>/dev/null || true
+	done < "$PID_FILE"
+	rm -f "$PID_FILE"
+fi
 
 echo "Stopping Docker containers..."
-docker compose down
+docker compose -f "$ROOT_DIR/docker-compose.yaml" down
 
 echo "All services and containers stopped."

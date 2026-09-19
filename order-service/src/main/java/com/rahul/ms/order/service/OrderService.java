@@ -4,17 +4,16 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.rahul.ms.order.client.InventoryClient;
 import com.rahul.ms.order.client.ProductClient;
-import com.rahul.ms.order.dto.InventoryResponse;
 import com.rahul.ms.order.dto.OrderRequest;
 import com.rahul.ms.order.dto.OrderResponse;
 import com.rahul.ms.order.entity.Order;
-import com.rahul.ms.order.event.OrderPlacedEvent;
+import com.rahul.ms.order.entity.OrderEventOutbox;
+import com.rahul.ms.order.repository.OrderEventOutboxRepository;
 import com.rahul.ms.order.repository.OrderRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -28,7 +27,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductClient productClient;
     private final InventoryClient inventoryClient;
-    private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
+        private final OrderEventOutboxRepository orderEventOutboxRepository;
 
     @Transactional
     public OrderResponse placeOrder(OrderRequest orderRequest) {
@@ -36,20 +35,9 @@ public class OrderService {
         var productResponse = productClient.getProductById(orderRequest.productId())
                 .orElseThrow(() -> new RuntimeException("Product not found with ID: " + orderRequest.productId()));
 
-        // 2. Validate stock
-        List<InventoryResponse> inventoryResponses = inventoryClient.checkStock(List.of(orderRequest.productId()));
-
-        boolean isStockAvailable = inventoryResponses.stream()
-                .anyMatch(inventory -> inventory.isInStock() && inventory.getAvailableQuantity() >= orderRequest.quantity());
-
-        if (!isStockAvailable) {
-            throw new IllegalArgumentException("Product is out of stock or insufficient quantity for ID: " + orderRequest.productId());
-        }
-
-        // 3. Deduct stock in inventory-service
+        // Inventory performs an atomic conditional reservation.
         inventoryClient.reduceStock(orderRequest.productId(), orderRequest.quantity());
 
-        // 4. Persist order
         var order = Order.builder()
                 .orderNumber(UUID.randomUUID().toString())
                 .productId(orderRequest.productId())
@@ -59,24 +47,13 @@ public class OrderService {
 
         var savedOrder = orderRepository.save(order);
 
-        // 5. Publish event asynchronously to Kafka
-        OrderPlacedEvent event = OrderPlacedEvent.builder()
+        orderEventOutboxRepository.save(OrderEventOutbox.builder()
                 .orderNumber(savedOrder.getOrderNumber())
                 .productId(savedOrder.getProductId())
                 .quantity(savedOrder.getQuantity())
                 .price(savedOrder.getPrice())
-                .build();
-
-        kafkaTemplate.send("order-placed-topic", savedOrder.getOrderNumber(), event)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Failed to send OrderPlacedEvent for order: {}", savedOrder.getOrderNumber(), ex);
-                    } else {
-                        log.info("OrderPlacedEvent successfully published for order: {} to partition: {}",
-                                savedOrder.getOrderNumber(),
-                                result.getRecordMetadata().partition());
-                    }
-                });
+                .nextAttemptAt(java.time.Instant.now())
+                .build());
 
         return new OrderResponse(
                 savedOrder.getId(),
