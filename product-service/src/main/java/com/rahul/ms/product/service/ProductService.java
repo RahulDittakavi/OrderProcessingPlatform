@@ -21,6 +21,7 @@ public class ProductService {
     
     public ProductResponse createProduct(ProductRequest productRequest) {
         Product product = Product.builder()
+                .skuCode(productRequest.skuCode())
                 .name(productRequest.name())
                 .description(productRequest.description())
                 .price(productRequest.price())
@@ -29,6 +30,7 @@ public class ProductService {
         log.info("Product {} is saved", product.getId());
         return new ProductResponse(
                 product.getId(),
+                product.getSkuCode(),
                 product.getName(),
                 product.getDescription(),
                 product.getPrice()
@@ -40,6 +42,7 @@ public class ProductService {
                   .stream()
                   .map(product -> new ProductResponse(
                           product.getId(),
+                          product.getSkuCode(),
                           product.getName(),
                           product.getDescription(),
                           product.getPrice()
@@ -52,6 +55,7 @@ public class ProductService {
                                                 .orElseThrow(() -> new ProductNotFoundException("Product not found: " + id));
         return new ProductResponse(
                 product.getId(),
+                product.getSkuCode(),
                 product.getName(),
                 product.getDescription(),
                 product.getPrice()
@@ -62,6 +66,7 @@ public class ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found: " + id));
 
+        product.setSkuCode(productRequest.skuCode());
         product.setName(productRequest.name());
         product.setDescription(productRequest.description());
         product.setPrice(productRequest.price());
@@ -71,6 +76,7 @@ public class ProductService {
 
         return new ProductResponse(
                 product.getId(),
+                product.getSkuCode(),
                 product.getName(),
                 product.getDescription(),
                 product.getPrice()

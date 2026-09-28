@@ -2,6 +2,7 @@ package com.rahul.ms.order.dto;
 
 import java.math.BigDecimal;
 
+import com.rahul.ms.order.entity.OrderStatus;
 import lombok.Builder;
 
 @Builder 
@@ -10,7 +11,8 @@ public record OrderResponse(
     String orderNumber,
     String productId,
     int quantity,
-    BigDecimal price
+    BigDecimal price,
+    OrderStatus status
 ) {
 
 }

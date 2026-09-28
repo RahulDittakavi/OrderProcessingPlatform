@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
 
 import com.rahul.ms.order.client.InventoryClient;
 import com.rahul.ms.order.client.ProductClient;
@@ -29,23 +29,31 @@ public class OrderService {
     private final InventoryClient inventoryClient;
         private final OrderEventOutboxRepository orderEventOutboxRepository;
 
-    @Transactional
     public OrderResponse placeOrder(OrderRequest orderRequest) {
         // 1. Fetch product details
         var productResponse = productClient.getProductById(orderRequest.productId())
                 .orElseThrow(() -> new RuntimeException("Product not found with ID: " + orderRequest.productId()));
-
-        // Inventory performs an atomic conditional reservation.
-        inventoryClient.reduceStock(orderRequest.productId(), orderRequest.quantity());
 
         var order = Order.builder()
                 .orderNumber(UUID.randomUUID().toString())
                 .productId(orderRequest.productId())
                 .quantity(orderRequest.quantity())
                 .price(productResponse.price().multiply(BigDecimal.valueOf(orderRequest.quantity())))
+                                .status(com.rahul.ms.order.entity.OrderStatus.PENDING)
                 .build();
 
         var savedOrder = orderRepository.save(order);
+
+                try {
+                        inventoryClient.reduceStock(productResponse.skuCode(), orderRequest.quantity());
+                } catch (HttpClientErrorException.BadRequest exception) {
+                        savedOrder.setStatus(com.rahul.ms.order.entity.OrderStatus.REJECTED);
+                        orderRepository.save(savedOrder);
+                        throw new IllegalArgumentException("Inventory reservation was rejected", exception);
+                }
+
+                savedOrder.setStatus(com.rahul.ms.order.entity.OrderStatus.CONFIRMED);
+                savedOrder = orderRepository.save(savedOrder);
 
         orderEventOutboxRepository.save(OrderEventOutbox.builder()
                 .orderNumber(savedOrder.getOrderNumber())
@@ -60,7 +68,8 @@ public class OrderService {
                 savedOrder.getOrderNumber(),
                 savedOrder.getProductId(),
                 savedOrder.getQuantity(),
-                savedOrder.getPrice()
+                savedOrder.getPrice(),
+                savedOrder.getStatus()
         );
     }
 
@@ -71,7 +80,8 @@ public class OrderService {
                 order.getOrderNumber(),
                 order.getProductId(),
                 order.getQuantity(),
-                order.getPrice()
+                order.getPrice(),
+                order.getStatus()
         )).toList();
     }
 }

@@ -20,5 +20,6 @@ public class Order {
     private String productId;
     private int quantity;
     private BigDecimal price;
+    private OrderStatus status;
 
 }

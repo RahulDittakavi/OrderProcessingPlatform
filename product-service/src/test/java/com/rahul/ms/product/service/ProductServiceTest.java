@@ -34,6 +34,7 @@ public class ProductServiceTest {
         String productId = "123";
         Product product = Product.builder()
                 .id(productId)
+            .skuCode("sku-test-123")
                 .name("Test Product")
                 .description("This is a test product")
                 .price(new BigDecimal("9.99"))
@@ -45,6 +46,7 @@ public class ProductServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.id()).isEqualTo(productId);
+        assertThat(result.skuCode()).isEqualTo("sku-test-123");
         assertThat(result.name()).isEqualTo("Test Product");
         assertThat(result.description()).isEqualTo("This is a test product");
         assertThat(result.price()).isEqualTo(new BigDecimal("9.99"));

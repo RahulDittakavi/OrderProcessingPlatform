@@ -20,6 +20,8 @@ import jakarta.validation.constraints.Positive;
 public class Product {
     @Id
     private String id;
+    @NotBlank(message = "Product SKU is required")
+    private String skuCode;
     @NotBlank(message = "Product name is required")
     private String name;
     @NotBlank(message = "Product description is required")

@@ -40,7 +40,7 @@ Create a product through the gateway:
 ```bash
 curl -i -X POST http://localhost:9000/api/products \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Keyboard","description":"Mechanical keyboard","price":49.99}'
+  -d '{"skuCode":"keyboard-001","name":"Keyboard","description":"Mechanical keyboard","price":49.99}'
 ```
 
 Then retrieve it:
@@ -110,11 +110,13 @@ Learn: schemas, indexes, transactions, repository methods, and the cost of choos
 Seed inventory, create a product, then place an order through `/api/orders`. Trace this path in [OrderService](../order-service/src/main/java/com/rahul/ms/order/service/OrderService.java):
 
 1. Fetch the product through `ProductClient`.
-2. Reserve stock through `InventoryClient`.
-3. Save the order in MongoDB.
-4. Save an outbox record in the same order-service transaction.
+2. Save the order as `PENDING` in MongoDB.
+3. Reserve stock through `InventoryClient` using the product's SKU.
+4. Mark explicit reservation rejections as `REJECTED`; successful reservations become `CONFIRMED`.
+5. Save an outbox record for a confirmed order.
 
 Try an order larger than available stock. Verify that the reservation fails and inspect whether the final state is consistent.
+If the reservation request times out, the order remains `PENDING` because the inventory result is unknown; reconciliation is a follow-up reliability task.
 
 Learn: orchestration, synchronous service calls, transaction boundaries, and partial failure.
 
