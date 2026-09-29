@@ -45,7 +45,8 @@ public class OrderService {
         var savedOrder = orderRepository.save(order);
 
                 try {
-                        inventoryClient.reduceStock(productResponse.skuCode(), orderRequest.quantity());
+                        inventoryClient.reduceStock(savedOrder.getOrderNumber(), productResponse.skuCode(),
+                                orderRequest.quantity());
                 } catch (HttpClientErrorException.BadRequest exception) {
                         savedOrder.setStatus(com.rahul.ms.order.entity.OrderStatus.REJECTED);
                         orderRepository.save(savedOrder);
