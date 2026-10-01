@@ -16,6 +16,10 @@ processes and containers with:
 ./stop-all.sh
 ```
 
+The Order Desk frontend is served by the API gateway at
+`http://localhost:9000/`. From there, you can add products, review inventory,
+and place orders against the running services.
+
 Connection settings can be overridden through environment variables, including
 `MONGO_ROOT_PASSWORD`, `DATABASE_PASSWORD`, `EUREKA_URL`, and
 `KAFKA_BOOTSTRAP_SERVERS`. Do not commit a `.env` file or production secrets.

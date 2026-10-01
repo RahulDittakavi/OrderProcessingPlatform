@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f6f1" />
+    <title>Order Desk | Order Processing Platform</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="wordmark" href="/" aria-label="Order Desk home">
+        <span class="wordmark-mark">OP</span>
+        <span>ORDER<span class="wordmark-light">DESK</span></span>
+      </a>
+      <nav class="topnav" aria-label="Main navigation">
+        <a class="nav-link nav-link-active" href="#overview">Overview</a>
+        <a class="nav-link" href="#products">Products</a>
+        <a class="nav-link" href="#orders">Orders</a>
+      </nav>
+      <div class="connection-state" id="connection-state">
+        <span class="connection-dot"></span>
+        <span>Connecting</span>
+      </div>
+    </header>
+
+    <main class="page-shell" id="overview">
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">ORDER PROCESSING PLATFORM <span id="today-label"></span></p>
+          <h1>Order desk<span class="heading-period">.</span></h1>
+          <p class="page-subtitle">A clear view of your catalog, stock, and incoming orders.</p>
+        </div>
+        <button class="button button-primary" id="open-product-dialog" type="button">
+          <span class="button-plus" aria-hidden="true">+</span> Add product
+        </button>
+      </section>
+
+      <section class="metrics" aria-label="Platform summary">
+        <div class="metric">
+          <span class="metric-label">CATALOG</span>
+          <strong class="metric-value" id="product-count">--</strong>
+          <span class="metric-note">products</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">ORDERS</span>
+          <strong class="metric-value" id="order-count">--</strong>
+          <span class="metric-note">all time</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">CONFIRMED</span>
+          <strong class="metric-value" id="confirmed-count">--</strong>
+          <span class="metric-note">orders</span>
+        </div>
+        <button class="refresh-button" id="refresh-button" type="button" title="Refresh data">
+          <span aria-hidden="true">↻</span> Refresh
+        </button>
+      </section>
+
+      <div class="work-grid">
+        <section class="catalog-section" id="products" aria-labelledby="catalog-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">YOUR INVENTORY</p>
+              <h2 id="catalog-title">Product catalog</h2>
+            </div>
+            <span class="section-count" id="catalog-count">0 ITEMS</span>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table product-table">
+              <thead>
+                <tr>
+                  <th scope="col">PRODUCT</th>
+                  <th scope="col">SKU</th>
+                  <th scope="col">PRICE</th>
+                  <th scope="col">AVAILABLE</th>
+                </tr>
+              </thead>
+              <tbody id="products-body">
+                <tr><td class="table-message" colspan="4">Loading products...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside class="order-panel" aria-labelledby="new-order-title">
+          <p class="eyebrow">FULFILLMENT</p>
+          <h2 id="new-order-title">Place an order</h2>
+          <p class="panel-description">Choose a product and reserve available stock.</p>
+          <form id="order-form" class="form-stack">
+            <label for="order-product">Product</label>
+            <select id="order-product" name="productId" required>
+              <option value="">Select a product</option>
+            </select>
+            <label for="order-quantity">Quantity</label>
+            <input id="order-quantity" name="quantity" type="number" min="1" step="1" value="1" required />
+            <div class="order-total" aria-live="polite">
+              <span>Estimated total</span>
+              <strong id="order-total">$0.00</strong>
+            </div>
+            <button class="button button-dark button-wide" type="submit" id="place-order-button">Place order <span aria-hidden="true">→</span></button>
+            <p class="form-feedback" id="order-feedback" role="status"></p>
+          </form>
+        </aside>
+      </div>
+
+      <section class="orders-section" id="orders" aria-labelledby="orders-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">LATEST ACTIVITY</p>
+            <h2 id="orders-title">Recent orders</h2>
+          </div>
+          <span class="section-count" id="orders-updated">LIVE DATA</span>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table orders-table">
+            <thead>
+              <tr>
+                <th scope="col">ORDER</th>
+                <th scope="col">PRODUCT</th>
+                <th scope="col">QTY</th>
+                <th scope="col">TOTAL</th>
+                <th scope="col">STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="orders-body">
+              <tr><td class="table-message" colspan="5">Loading orders...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <p class="page-footer">ORDER PROCESSING PLATFORM <span>·</span> LOCAL OPERATIONS</p>
+    </main>
+
+    <dialog class="product-dialog" id="product-dialog" aria-labelledby="product-dialog-title">
+      <form id="product-form" class="dialog-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CATALOG</p>
+            <h2 id="product-dialog-title">Add a product</h2>
+          </div>
+          <button class="dialog-close" type="button" id="close-product-dialog" aria-label="Close">×</button>
+        </div>
+        <label for="product-name">Product name</label>
+        <input id="product-name" name="name" autocomplete="off" required maxlength="120" />
+        <label for="product-sku">SKU</label>
+        <input id="product-sku" name="skuCode" autocomplete="off" required maxlength="80" />
+        <label for="product-description">Description</label>
+        <textarea id="product-description" name="description" rows="3" required maxlength="500"></textarea>
+        <label for="product-price">Price</label>
+        <input id="product-price" name="price" type="number" min="0.01" step="0.01" required />
+        <p class="form-feedback" id="product-feedback" role="status"></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" type="button" id="cancel-product-dialog">Cancel</button>
+          <button class="button button-primary" type="submit" id="save-product-button">Save product</button>
+        </div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
