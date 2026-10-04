@@ -9,6 +9,7 @@ const toast = document.querySelector("#toast");
 let products = [];
 let orders = [];
 let toastTimeout;
+let pendingOrderSubmission;
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -160,13 +161,26 @@ orderForm.addEventListener("submit", async (event) => {
   const button = document.querySelector("#place-order-button");
   const feedback = document.querySelector("#order-feedback");
   const formData = new FormData(orderForm);
+  const orderRequest = {
+    productId: formData.get("productId"),
+    quantity: Number(formData.get("quantity")),
+  };
+  const requestFingerprint = JSON.stringify(orderRequest);
+  if (!pendingOrderSubmission || pendingOrderSubmission.fingerprint !== requestFingerprint) {
+    pendingOrderSubmission = {
+      fingerprint: requestFingerprint,
+      key: crypto.randomUUID(),
+    };
+  }
   button.disabled = true;
   feedback.textContent = "";
   try {
     await requestJson("/api/orders", {
       method: "POST",
-      body: JSON.stringify({ productId: formData.get("productId"), quantity: Number(formData.get("quantity")) }),
+      headers: { "Idempotency-Key": pendingOrderSubmission.key },
+      body: JSON.stringify(orderRequest),
     });
+    pendingOrderSubmission = undefined;
     orderForm.reset();
     updateOrderTotal();
     await loadDashboard();
