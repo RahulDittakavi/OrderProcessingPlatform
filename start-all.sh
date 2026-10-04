@@ -14,7 +14,9 @@ mkdir -p "$LOG_DIR"
 : > "$PID_FILE"
 
 echo -e "${BLUE}=== Step 1: Starting Docker Infrastructure Containers ===${NC}"
-docker compose -f "$ROOT_DIR/docker-compose.yaml" up -d --wait
+COMPOSE_ARGS=(-f "$ROOT_DIR/docker-compose.yaml")
+[ -f "$ROOT_DIR/docker-compose.override.yaml" ] && COMPOSE_ARGS+=(-f "$ROOT_DIR/docker-compose.override.yaml")
+docker compose "${COMPOSE_ARGS[@]}" up -d --wait
 
 echo -e "${BLUE}=== Step 2: Packaging Services Individually ===${NC}"
 SERVICES=("discovery-server" "product-service" "inventory-service" "order-service" "api-gateway")
