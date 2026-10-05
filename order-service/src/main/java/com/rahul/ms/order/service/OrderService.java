@@ -63,27 +63,30 @@ public class OrderService {
             return replay(concurrentlyCreatedOrder.get(), orderRequest);
         }
 
+        return reserveAndConfirm(savedOrder, productResponse.skuCode());
+    }
+
+    private OrderResponse reserveAndConfirm(Order order, String skuCode) {
         try {
-            inventoryClient.reduceStock(savedOrder.getOrderNumber(), productResponse.skuCode(),
-                    orderRequest.quantity());
+            inventoryClient.reduceStock(order.getOrderNumber(), skuCode, order.getQuantity());
         } catch (HttpClientErrorException.BadRequest exception) {
-            savedOrder.setStatus(OrderStatus.REJECTED);
-            orderRepository.save(savedOrder);
+            order.setStatus(OrderStatus.REJECTED);
+            orderRepository.save(order);
             throw new IllegalArgumentException("Inventory reservation was rejected", exception);
         }
 
-        savedOrder.setStatus(OrderStatus.CONFIRMED);
-        savedOrder = orderRepository.save(savedOrder);
+        order.setStatus(OrderStatus.CONFIRMED);
+        order = orderRepository.save(order);
 
         orderEventOutboxRepository.save(OrderEventOutbox.builder()
-                .orderNumber(savedOrder.getOrderNumber())
-                .productId(savedOrder.getProductId())
-                .quantity(savedOrder.getQuantity())
-                .price(savedOrder.getPrice())
+                .orderNumber(order.getOrderNumber())
+                .productId(order.getProductId())
+                .quantity(order.getQuantity())
+                .price(order.getPrice())
                 .nextAttemptAt(Instant.now())
                 .build());
 
-        return toResponse(savedOrder);
+        return toResponse(order);
     }
 
     private OrderResponse replay(Order order, OrderRequest request) {
@@ -93,6 +96,12 @@ public class OrderService {
         }
         if (order.getStatus() == OrderStatus.REJECTED) {
             throw new IllegalArgumentException("Inventory reservation was rejected");
+        }
+        if (order.getStatus() == OrderStatus.PENDING) {
+            var product = productClient.getProductById(order.getProductId())
+                    .orElseThrow(() -> new RuntimeException(
+                            "Product not found with ID: " + order.getProductId()));
+            return reserveAndConfirm(order, product.skuCode());
         }
         return toResponse(order);
     }

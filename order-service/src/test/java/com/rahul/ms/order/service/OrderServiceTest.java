@@ -172,6 +172,34 @@ class OrderServiceTest {
     }
 
     @Test
+    void retriesInventoryReservationForPreviouslyPendingOrder() {
+        Order pendingOrder = Order.builder()
+                .id("order-id")
+                .idempotencyKey("request-123")
+                .orderNumber("original-order-number")
+                .productId("product-123")
+                .quantity(2)
+                .price(new BigDecimal("99.98"))
+                .status(OrderStatus.PENDING)
+                .build();
+        when(orderRepository.findByIdempotencyKey("request-123")).thenReturn(Optional.of(pendingOrder));
+        when(productClient.getProductById("product-123")).thenReturn(Optional.of(
+                new ProductResponse("product-123", "sku-456", "Keyboard", "Mechanical keyboard",
+                        new BigDecimal("49.99"))));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderEventOutboxRepository.save(any(OrderEventOutbox.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderResponse response = orderService.placeOrder(
+                new OrderRequest("product-123", 2, null), "request-123");
+
+        verify(inventoryClient).reduceStock("original-order-number", "sku-456", 2);
+        verify(orderEventOutboxRepository).save(any(OrderEventOutbox.class));
+        assertEquals(OrderStatus.CONFIRMED, response.status());
+        assertEquals(OrderStatus.CONFIRMED, pendingOrder.getStatus());
+    }
+
+    @Test
     void rejectsReusingKeyForDifferentRequest() {
         Order existingOrder = Order.builder()
                 .idempotencyKey("request-123")
