@@ -97,8 +97,16 @@ overrides include:
 | `EUREKA_URL` | Eureka registry URL. |
 | `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address used by Order Service. |
 | `KAFKA_ADVERTISED_HOST` | Host advertised by the Compose Kafka broker. |
+| `FLYWAY_BASELINE_ON_MIGRATE` | Set to `true` only when upgrading an existing inventory database that has schema objects but no Flyway history. |
 
 Do not commit a `.env` file or production credentials.
+
+The Inventory Service applies versioned Flyway migrations on startup and checks
+the resulting schema with Hibernate. For a new database, no manual schema setup
+is required. When upgrading a database created before Flyway was introduced,
+back up the database and set `FLYWAY_BASELINE_ON_MIGRATE=true` for the first
+startup so Flyway records the existing schema at baseline version `0`; review
+the migration and verify the existing tables before doing so.
 
 ## Documentation and API exploration
 
