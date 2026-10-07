@@ -1,0 +1,267 @@
+{
+  "info": {
+    "_postman_id": "d484e3ca-2f03-4ed2-9e1b-3e745d971202",
+    "name": "Order Processing Platform",
+    "description": "Requests for the Product, Inventory, and Order APIs through the API gateway. Start the local stack with ./start-all.sh before sending requests. Create a product using the seeded iphone_15 SKU before placing an order.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9000",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productSku",
+      "value": "iphone_15",
+      "type": "string"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": "postman-demo-order-001",
+      "type": "string"
+    },
+    {
+      "key": "reservationKey",
+      "value": "postman-demo-reservation-001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Create product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Product created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    const product = pm.response.json();",
+                  "    pm.collectionVariables.set('productId', product.id);",
+                  "    pm.collectionVariables.set('productSku', product.skuCode);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skuCode\": \"{{productSku}}\",\n  \"name\": \"iPhone 15\",\n  \"description\": \"Demo product for the order processing platform\",\n  \"price\": 999.99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/products",
+            "description": "Creates a product with the seeded iphone_15 inventory SKU and saves its returned ID to the productId collection variable. If this SKU already exists in the product catalog, use a new productSku and make sure inventory has that SKU before placing an order."
+          },
+          "response": []
+        },
+        {
+          "name": "List products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products"
+          },
+          "response": []
+        },
+        {
+          "name": "Get product by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{productId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skuCode\": \"{{productSku}}\",\n  \"name\": \"iPhone 15 - Updated\",\n  \"description\": \"Updated demo product description\",\n  \"price\": 949.99\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/products/{{productId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete product",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{productId}}",
+            "description": "Permanently deletes this product from the catalog. Use only when you intend to remove it."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "Check stock for multiple SKUs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory?skuCode={{productSku}}&skuCode=pixel_8",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory"
+              ],
+              "query": [
+                {
+                  "key": "skuCode",
+                  "value": "{{productSku}}"
+                },
+                {
+                  "key": "skuCode",
+                  "value": "pixel_8"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check stock by SKU",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/{{productSku}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Reserve stock",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{reservationKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/reduce-stock?skuCode={{productSku}}&quantity=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "reduce-stock"
+              ],
+              "query": [
+                {
+                  "key": "skuCode",
+                  "value": "{{productSku}}"
+                },
+                {
+                  "key": "quantity",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Reserves one unit. Change reservationKey before making a different reservation; reusing a key with different reservation details is a conflict."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "List orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/orders"
+          },
+          "response": []
+        },
+        {
+          "name": "Place order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Order created or replayed', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/orders",
+            "description": "Create the product first, then place the order. Repeating this request with the same Idempotency-Key and details reuses the existing order; change the key for a new order. Inventory is reserved as part of order placement."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

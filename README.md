@@ -113,3 +113,10 @@ the migration and verify the existing tables before doing so.
 The Order Service exposes OpenAPI documentation at
 `http://localhost:8081/swagger-ui.html`. The backend learning notes are in
 [`docs/BACKEND-LEARNING.md`](docs/BACKEND-LEARNING.md).
+
+Import [`postman/OrderProcessingPlatform.postman_collection.json`](postman/OrderProcessingPlatform.postman_collection.json)
+into Postman to try the APIs through the gateway. The collection defaults to
+`http://localhost:9000`; start the local stack with `./start-all.sh` first.
+Create a product with the seeded `iphone_15` inventory SKU before placing an
+order. The create request stores the returned product ID for the later requests.
+The delete-product request removes the product from the catalog.
