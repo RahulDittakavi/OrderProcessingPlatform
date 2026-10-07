@@ -41,12 +41,16 @@ public class OrderEventPublisher {
                     if (exception == null) {
                         outbox.setPublished(true);
                         outboxRepository.save(outbox);
-                        log.info("Published order event for {}", outbox.getOrderNumber());
+                        var metadata = result.getRecordMetadata();
+                        log.info("Published order event orderNumber={} topic={} partition={} offset={}",
+                                outbox.getOrderNumber(), metadata.topic(), metadata.partition(), metadata.offset());
                     } else {
                         outbox.setAttempts(outbox.getAttempts() + 1);
-                        outbox.setNextAttemptAt(Instant.now().plus(backoff(outbox.getAttempts())));
+                        Duration retryDelay = backoff(outbox.getAttempts());
+                        outbox.setNextAttemptAt(Instant.now().plus(retryDelay));
                         outboxRepository.save(outbox);
-                        log.error("Failed to publish order event for {}", outbox.getOrderNumber(), exception);
+                        log.error("Failed to publish order event orderNumber={} attempt={} retryDelaySeconds={}",
+                                outbox.getOrderNumber(), outbox.getAttempts(), retryDelay.toSeconds(), exception);
                     }
                 });
     }

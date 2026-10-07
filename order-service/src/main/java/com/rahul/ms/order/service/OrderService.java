@@ -34,14 +34,20 @@ public class OrderService {
     private final OrderEventOutboxRepository orderEventOutboxRepository;
 
     public OrderResponse placeOrder(OrderRequest orderRequest, String idempotencyKey) {
+        log.info("Received order request for productId={} quantity={}",
+                orderRequest.productId(), orderRequest.quantity());
         var existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey);
         if (existingOrder.isPresent()) {
+            log.info("Replaying order orderNumber={} status={}",
+                    existingOrder.get().getOrderNumber(), existingOrder.get().getStatus());
             return replay(existingOrder.get(), orderRequest);
         }
 
-        // 1. Fetch product details
         var productResponse = productClient.getProductById(orderRequest.productId())
-                .orElseThrow(() -> new RuntimeException("Product not found with ID: " + orderRequest.productId()));
+                .orElseThrow(() -> {
+                    log.warn("Unable to place order: product not found productId={}", orderRequest.productId());
+                    return new RuntimeException("Product not found with ID: " + orderRequest.productId());
+                });
 
         var order = Order.builder()
                 .idempotencyKey(idempotencyKey)
@@ -58,11 +64,16 @@ public class OrderService {
         } catch (DuplicateKeyException exception) {
             var concurrentlyCreatedOrder = orderRepository.findByIdempotencyKey(idempotencyKey);
             if (concurrentlyCreatedOrder.isEmpty()) {
+                log.error("Order persistence reported a duplicate key but no matching order was found");
                 throw exception;
             }
+            log.info("Concurrent order request resolved by replaying orderNumber={}",
+                    concurrentlyCreatedOrder.get().getOrderNumber());
             return replay(concurrentlyCreatedOrder.get(), orderRequest);
         }
 
+        log.info("Created pending order orderNumber={} productId={} quantity={}",
+                savedOrder.getOrderNumber(), savedOrder.getProductId(), savedOrder.getQuantity());
         return reserveAndConfirm(savedOrder, productResponse.skuCode());
     }
 
@@ -70,6 +81,8 @@ public class OrderService {
         try {
             inventoryClient.reduceStock(order.getOrderNumber(), skuCode, order.getQuantity());
         } catch (HttpClientErrorException.BadRequest exception) {
+            log.warn("Inventory rejected reservation for orderNumber={} skuCode={} quantity={} status={}",
+                    order.getOrderNumber(), skuCode, order.getQuantity(), exception.getStatusCode());
             order.setStatus(OrderStatus.REJECTED);
             orderRepository.save(order);
             throw new IllegalArgumentException("Inventory reservation was rejected", exception);
@@ -86,21 +99,30 @@ public class OrderService {
                 .nextAttemptAt(Instant.now())
                 .build());
 
+        log.info("Order confirmed orderNumber={} productId={} quantity={}",
+                order.getOrderNumber(), order.getProductId(), order.getQuantity());
         return toResponse(order);
     }
 
     private OrderResponse replay(Order order, OrderRequest request) {
         if (!order.getProductId().equals(request.productId()) || order.getQuantity() != request.quantity()) {
+            log.warn("Idempotency conflict for orderNumber={} requestedProductId={} requestedQuantity={}",
+                    order.getOrderNumber(), request.productId(), request.quantity());
             throw new IdempotencyKeyConflictException(
                     "Idempotency-Key was already used for a different order request");
         }
         if (order.getStatus() == OrderStatus.REJECTED) {
+            log.warn("Cannot replay rejected order orderNumber={}", order.getOrderNumber());
             throw new IllegalArgumentException("Inventory reservation was rejected");
         }
         if (order.getStatus() == OrderStatus.PENDING) {
             var product = productClient.getProductById(order.getProductId())
-                    .orElseThrow(() -> new RuntimeException(
-                            "Product not found with ID: " + order.getProductId()));
+                    .orElseThrow(() -> {
+                        log.warn("Unable to resume pending order: product not found orderNumber={} productId={}",
+                                order.getOrderNumber(), order.getProductId());
+                        return new RuntimeException("Product not found with ID: " + order.getProductId());
+                    });
+            log.info("Resuming pending order orderNumber={}", order.getOrderNumber());
             return reserveAndConfirm(order, product.skuCode());
         }
         return toResponse(order);
@@ -119,6 +141,7 @@ public class OrderService {
 
     public List<OrderResponse> getAllOrders() {
         var orders = orderRepository.findAll();
+        log.debug("Retrieved {} orders", orders.size());
         return orders.stream().map(order -> new OrderResponse(
                 order.getId(),
                 order.getOrderNumber(),

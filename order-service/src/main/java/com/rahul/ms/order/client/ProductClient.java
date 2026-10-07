@@ -27,7 +27,7 @@ public class ProductClient {
     @CircuitBreaker(name = "productService", fallbackMethod = "getProductFallback")
     @Retry(name = "productService")
     public Optional<ProductResponse> getProductById(String productId) {
-        log.info("Calling product-service via Eureka for productId: {}", productId);
+        log.debug("Requesting product details productId={}", productId);
         ProductResponse response = restClient.get()
                 .uri("/api/products/{id}", productId)
                 .retrieve()
@@ -36,7 +36,7 @@ public class ProductClient {
     }
 
     public Optional<ProductResponse> getProductFallback(String productId, Throwable throwable) {
-        log.error("Fallback triggered for productId: {}. Downstream unavailable: {}", productId, throwable.getMessage());
+        log.warn("Product service unavailable; fallback returned no product productId={}", productId, throwable);
         return Optional.empty();
     }
 }

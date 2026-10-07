@@ -1,12 +1,13 @@
 package com.rahul.ms.order.client;
 
-import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import com.rahul.ms.order.dto.InventoryResponse;
@@ -29,11 +30,17 @@ public class InventoryClient {
                 .queryParam("skuCode", skuCodes)
                 .toUriString();
 
-        return restClientBuilder.build()
-                .get()
-                .uri(uri)
-                .retrieve()
-                .body(new ParameterizedTypeReference<List<InventoryResponse>>() {});
+        log.debug("Checking inventory for {} SKU(s)", skuCodes.size());
+        try {
+            return restClientBuilder.build()
+                    .get()
+                    .uri(uri)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<InventoryResponse>>() {});
+        } catch (RestClientException exception) {
+            log.error("Inventory lookup failed for {} SKU(s)", skuCodes.size(), exception);
+            throw exception;
+        }
     }
 
     public void reduceStock(String reservationId, String skuCode, int quantity) {
@@ -42,11 +49,23 @@ public class InventoryClient {
                 .queryParam("quantity", quantity)
                 .toUriString();
 
-        restClientBuilder.build()
-        .put()
-        .uri(uri)
-        .header("Idempotency-Key", reservationId)
-        .retrieve()
-        .toBodilessEntity();
+        log.debug("Requesting inventory reservation skuCode={} quantity={}", skuCode, quantity);
+        try {
+            restClientBuilder.build()
+                    .put()
+                    .uri(uri)
+                    .header("Idempotency-Key", reservationId)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException exception) {
+            if (exception.getStatusCode().is5xxServerError()) {
+                log.error("Inventory reservation returned server error skuCode={} quantity={} status={}",
+                        skuCode, quantity, exception.getStatusCode(), exception);
+            }
+            throw exception;
+        } catch (RestClientException exception) {
+            log.error("Inventory reservation request failed skuCode={} quantity={}", skuCode, quantity, exception);
+            throw exception;
+        }
     }
 }

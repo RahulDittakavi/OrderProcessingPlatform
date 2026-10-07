@@ -23,7 +23,7 @@ public class InventoryService {
 
     @Transactional(readOnly = true)
     public List<InventoryResponse> isInStock(List<String> skuCodes) {
-        log.info("Checking stock for skuCodes: {}", skuCodes);
+        log.debug("Checking stock for {} SKU(s)", skuCodes.size());
 
         return inventoryRepository.findBySkuCodeIn(skuCodes).stream()
                 .map(inventory -> InventoryResponse.builder()
@@ -36,7 +36,7 @@ public class InventoryService {
 
     @Transactional(readOnly = true)
     public InventoryResponse checkStockBySku(String skuCode) {
-        log.info("Checking stock for single skuCode: {}", skuCode);
+        log.debug("Checking stock for skuCode={}", skuCode);
 
         return inventoryRepository.findBySkuCode(skuCode)
                 .map(inventory -> InventoryResponse.builder()
@@ -67,8 +67,10 @@ public class InventoryService {
         if (existingReservation.isPresent()) {
             InventoryReservation reservation = existingReservation.get();
             if (!reservation.getSkuCode().equals(skuCode) || reservation.getQuantity() != quantity) {
+                log.warn("Reservation key reused with different details skuCode={} quantity={}", skuCode, quantity);
                 throw new IllegalArgumentException("Reservation ID was already used with a different request");
             }
+            log.info("Replayed inventory reservation skuCode={} quantity={}", skuCode, quantity);
             return;
         }
 
