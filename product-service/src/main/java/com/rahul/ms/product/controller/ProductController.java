@@ -33,7 +33,7 @@ public class ProductController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create a product", description = "Adds a new product to MongoDB")
+    @Operation(summary = "Create a product", description = "Adds a new product to PostgreSQL")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "201", description = "Product created successfully"),
         @ApiResponse(responseCode = "400", description = "Invalid product request payload")
@@ -58,7 +58,7 @@ public class ProductController {
         @ApiResponse(responseCode = "404", description = "Product not found")
     })
     public ProductResponse getProductById(
-            @Parameter(description = "Unique identifier of the product", example = "64f1a2b3c4d5e6f7a8b9c0d1")
+            @Parameter(description = "UUID of the product", example = "64f1a2b3-c4d5-46f7-a8b9-c0d1e2f3a4b5")
             @PathVariable String id) {
         return productService.getProductById(id);
     }
@@ -72,7 +72,7 @@ public class ProductController {
         @ApiResponse(responseCode = "404", description = "Product not found")
     })
     public ProductResponse updateProduct(
-            @Parameter(description = "Unique identifier of the product to update", example = "64f1a2b3c4d5e6f7a8b9c0d1")
+            @Parameter(description = "UUID of the product to update", example = "64f1a2b3-c4d5-46f7-a8b9-c0d1e2f3a4b5")
             @PathVariable String id,
             @RequestBody @Valid ProductRequest productRequest) {
         return productService.updateProduct(id, productRequest);
@@ -86,7 +86,7 @@ public class ProductController {
         @ApiResponse(responseCode = "404", description = "Product not found")
     })
     public void deleteProduct(
-            @Parameter(description = "Unique identifier of the product to delete", example = "64f1a2b3c4d5e6f7a8b9c0d1")
+            @Parameter(description = "UUID of the product to delete", example = "64f1a2b3-c4d5-46f7-a8b9-c0d1e2f3a4b5")
             @PathVariable String id) {
         productService.deleteProduct(id);
     }

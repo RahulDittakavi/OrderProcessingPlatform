@@ -11,6 +11,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$ROOT_DIR/logs"
 PID_FILE="$LOG_DIR/service-pids"
 mkdir -p "$LOG_DIR"
+: "${DB_PASSWORD:?Set DB_PASSWORD for the local PostgreSQL orderapp role before starting services.}"
 : > "$PID_FILE"
 
 echo -e "${BLUE}=== Step 1: Starting Docker Infrastructure Containers ===${NC}"

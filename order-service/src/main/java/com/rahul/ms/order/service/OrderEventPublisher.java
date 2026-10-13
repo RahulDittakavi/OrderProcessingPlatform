@@ -1,13 +1,16 @@
 package com.rahul.ms.order.service;
 
-import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.ExecutionException;
 
+import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.rahul.ms.order.entity.OrderEventOutbox;
+import com.rahul.ms.order.entity.OutboxEventStatus;
 import com.rahul.ms.order.event.OrderPlacedEvent;
 import com.rahul.ms.order.repository.OrderEventOutboxRepository;
 
@@ -22,40 +25,43 @@ public class OrderEventPublisher {
     private final OrderEventOutboxRepository outboxRepository;
     private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
 
-    @Scheduled(fixedDelayString = "${order.events.publisher-delay:5000}")
+    @Scheduled(
+            fixedDelayString = "${order.events.publisher-delay:5000}",
+            initialDelayString = "${order.events.publisher.initial-delay:0}")
+    @Transactional
     public void publishPendingEvents() {
-        outboxRepository.findTop100ByPublishedFalseAndNextAttemptAtLessThanEqualOrderByNextAttemptAtAsc(Instant.now())
-                .forEach(this::publish);
+        for (OrderEventOutbox outbox : outboxRepository.lockNextPendingEvents()) {
+            if (!publish(outbox)) {
+                break;
+            }
+        }
     }
 
-    private void publish(OrderEventOutbox outbox) {
-        OrderPlacedEvent event = OrderPlacedEvent.builder()
-                .orderNumber(outbox.getOrderNumber())
-                .productId(outbox.getProductId())
-                .quantity(outbox.getQuantity())
-                .price(outbox.getPrice())
-                .build();
-
-        kafkaTemplate.send("order-placed-topic", outbox.getOrderNumber(), event)
-                .whenComplete((result, exception) -> {
-                    if (exception == null) {
-                        outbox.setPublished(true);
-                        outboxRepository.save(outbox);
-                        var metadata = result.getRecordMetadata();
-                        log.info("Published order event orderNumber={} topic={} partition={} offset={}",
-                                outbox.getOrderNumber(), metadata.topic(), metadata.partition(), metadata.offset());
-                    } else {
-                        outbox.setAttempts(outbox.getAttempts() + 1);
-                        Duration retryDelay = backoff(outbox.getAttempts());
-                        outbox.setNextAttemptAt(Instant.now().plus(retryDelay));
-                        outboxRepository.save(outbox);
-                        log.error("Failed to publish order event orderNumber={} attempt={} retryDelaySeconds={}",
-                                outbox.getOrderNumber(), outbox.getAttempts(), retryDelay.toSeconds(), exception);
-                    }
-                });
+    private boolean publish(OrderEventOutbox outbox) {
+        try {
+            var result = kafkaTemplate.send(
+                    "order-placed-topic", outbox.getAggregateId(), outbox.getPayload()).get();
+            outbox.setStatus(OutboxEventStatus.SENT);
+            outbox.setSentAt(Instant.now());
+            outboxRepository.save(outbox);
+            var metadata = result.getRecordMetadata();
+            log.info("Published order event aggregateId={} topic={} partition={} offset={}",
+                    outbox.getAggregateId(), metadata.topic(), metadata.partition(), metadata.offset());
+            return true;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            recordFailure(outbox, exception);
+            return false;
+        } catch (ExecutionException | KafkaException exception) {
+            recordFailure(outbox, exception);
+            return true;
+        }
     }
 
-    private Duration backoff(int attempts) {
-        return Duration.ofSeconds(Math.min(60, 1L << Math.min(attempts, 6)));
+    private void recordFailure(OrderEventOutbox outbox, Exception exception) {
+        outbox.setRetryCount(outbox.getRetryCount() + 1);
+        outboxRepository.save(outbox);
+        log.error("Failed to publish order event aggregateId={} retryCount={}",
+                outbox.getAggregateId(), outbox.getRetryCount(), exception);
     }
 }

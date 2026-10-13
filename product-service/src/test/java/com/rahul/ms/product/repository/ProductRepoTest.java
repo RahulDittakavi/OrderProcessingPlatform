@@ -16,6 +16,7 @@ public class ProductRepoTest {
     @Test
     public void testSaveProduct() {
         Product product = new Product();
+        product.setSkuCode("sku-test");
         product.setName("Test Product");
         product.setDescription("This is a test product");
         product.setPrice(new BigDecimal("9.99"));

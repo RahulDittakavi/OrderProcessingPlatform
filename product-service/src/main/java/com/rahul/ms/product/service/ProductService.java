@@ -2,6 +2,7 @@ package com.rahul.ms.product.service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.rahul.ms.product.dto.ProductRequest;
@@ -26,10 +27,10 @@ public class ProductService {
                 .description(productRequest.description())
                 .price(productRequest.price())
                 .build();
-        productRepository.save(product);
+        product = productRepository.save(product);
         log.info("Product {} is saved", product.getId());
         return new ProductResponse(
-                product.getId(),
+                product.getId().toString(),
                 product.getSkuCode(),
                 product.getName(),
                 product.getDescription(),
@@ -41,7 +42,7 @@ public class ProductService {
         List<ProductResponse> products = productRepository.findAll()
                   .stream()
                   .map(product -> new ProductResponse(
-                          product.getId(),
+                          product.getId().toString(),
                           product.getSkuCode(),
                           product.getName(),
                           product.getDescription(),
@@ -53,14 +54,10 @@ public class ProductService {
     }
 
     public ProductResponse getProductById(String id) {
-        Product product = productRepository.findById(id)
-                                                .orElseThrow(() -> {
-                                                    log.warn("Product not found productId={}", id);
-                                                    return new ProductNotFoundException("Product not found: " + id);
-                                                });
+        Product product = findProductById(id);
         log.debug("Retrieved product productId={}", id);
         return new ProductResponse(
-                product.getId(),
+                product.getId().toString(),
                 product.getSkuCode(),
                 product.getName(),
                 product.getDescription(),
@@ -69,11 +66,7 @@ public class ProductService {
     }
 
     public ProductResponse updateProduct(String id, ProductRequest productRequest) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("Cannot update missing product productId={}", id);
-                    return new ProductNotFoundException("Product not found: " + id);
-                });
+        Product product = findProductById(id);
 
         product.setSkuCode(productRequest.skuCode());
         product.setName(productRequest.name());
@@ -84,7 +77,7 @@ public class ProductService {
         log.info("Product {} is updated", product.getId());
 
         return new ProductResponse(
-                product.getId(),
+                product.getId().toString(),
                 product.getSkuCode(),
                 product.getName(),
                 product.getDescription(),
@@ -93,11 +86,7 @@ public class ProductService {
     }
 
     public void deleteProduct(String id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("Cannot delete missing product productId={}", id);
-                    return new ProductNotFoundException("Product not found");
-                });
+        Product product = findProductById(id);
 
         productRepository.delete(product);
         log.info("Product {} is deleted", product.getId());
@@ -106,5 +95,20 @@ public class ProductService {
     public Optional<ProductResponse> getProductFallback(String productId, Throwable throwable) {
         log.warn("Product lookup fallback returned no product productId={}", productId, throwable);
         return Optional.empty();
+    }
+
+    private Product findProductById(String id) {
+        UUID productId;
+        try {
+            productId = UUID.fromString(id);
+        } catch (IllegalArgumentException exception) {
+            log.warn("Product not found productId={}", id);
+            throw new ProductNotFoundException("Product not found: " + id);
+        }
+        return productRepository.findById(productId)
+                .orElseThrow(() -> {
+                    log.warn("Product not found productId={}", id);
+                    return new ProductNotFoundException("Product not found: " + id);
+                });
     }
 }

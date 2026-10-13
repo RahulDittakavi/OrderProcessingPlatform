@@ -1,9 +1,12 @@
 package com.rahul.ms.order.repository;
 
-import org.springframework.data.mongodb.repository.MongoRepository;
-import com.rahul.ms.order.entity.Order;
 import java.util.Optional;
+import java.util.UUID;
 
-public interface OrderRepository extends MongoRepository<Order, String> {
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.rahul.ms.order.entity.Order;
+
+public interface OrderRepository extends JpaRepository<Order, UUID> {
     Optional<Order> findByIdempotencyKey(String idempotencyKey);
 }

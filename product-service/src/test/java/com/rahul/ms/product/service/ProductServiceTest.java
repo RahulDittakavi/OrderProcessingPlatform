@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.verify;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.rahul.ms.product.dto.ProductResponse;
 import com.rahul.ms.product.model.Product;
@@ -31,16 +32,16 @@ public class ProductServiceTest {
 
     @Test
     public void testGetProductById() {
-        String productId = "123";
+        String productId = "00000000-0000-0000-0000-000000000001";
         Product product = Product.builder()
-                .id(productId)
+                .id(UUID.fromString(productId))
             .skuCode("sku-test-123")
                 .name("Test Product")
                 .description("This is a test product")
                 .price(new BigDecimal("9.99"))
                 .build();
 
-        given(productRepository.findById(productId)).willReturn(Optional.of(product));
+        given(productRepository.findById(UUID.fromString(productId))).willReturn(Optional.of(product));
 
         ProductResponse result = productService.getProductById(productId);
 
@@ -51,6 +52,6 @@ public class ProductServiceTest {
         assertThat(result.description()).isEqualTo("This is a test product");
         assertThat(result.price()).isEqualTo(new BigDecimal("9.99"));
 
-        verify(productRepository).findById(productId);
+        verify(productRepository).findById(UUID.fromString(productId));
     }
 }

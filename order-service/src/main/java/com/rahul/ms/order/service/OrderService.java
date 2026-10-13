@@ -1,11 +1,10 @@
 package com.rahul.ms.order.service;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 
@@ -14,10 +13,8 @@ import com.rahul.ms.order.client.ProductClient;
 import com.rahul.ms.order.dto.OrderRequest;
 import com.rahul.ms.order.dto.OrderResponse;
 import com.rahul.ms.order.entity.Order;
-import com.rahul.ms.order.entity.OrderEventOutbox;
 import com.rahul.ms.order.entity.OrderStatus;
 import com.rahul.ms.order.exception.IdempotencyKeyConflictException;
-import com.rahul.ms.order.repository.OrderEventOutboxRepository;
 import com.rahul.ms.order.repository.OrderRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -31,7 +28,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductClient productClient;
     private final InventoryClient inventoryClient;
-    private final OrderEventOutboxRepository orderEventOutboxRepository;
+    private final OrderPersistenceService orderPersistenceService;
 
     public OrderResponse placeOrder(OrderRequest orderRequest, String idempotencyKey) {
         log.info("Received order request for productId={} quantity={}",
@@ -61,7 +58,7 @@ public class OrderService {
         Order savedOrder;
         try {
             savedOrder = orderRepository.save(order);
-        } catch (DuplicateKeyException exception) {
+        } catch (DataIntegrityViolationException exception) {
             var concurrentlyCreatedOrder = orderRepository.findByIdempotencyKey(idempotencyKey);
             if (concurrentlyCreatedOrder.isEmpty()) {
                 log.error("Order persistence reported a duplicate key but no matching order was found");
@@ -88,16 +85,7 @@ public class OrderService {
             throw new IllegalArgumentException("Inventory reservation was rejected", exception);
         }
 
-        order.setStatus(OrderStatus.CONFIRMED);
-        order = orderRepository.save(order);
-
-        orderEventOutboxRepository.save(OrderEventOutbox.builder()
-                .orderNumber(order.getOrderNumber())
-                .productId(order.getProductId())
-                .quantity(order.getQuantity())
-                .price(order.getPrice())
-                .nextAttemptAt(Instant.now())
-                .build());
+        order = orderPersistenceService.confirmAndEnqueue(order);
 
         log.info("Order confirmed orderNumber={} productId={} quantity={}",
                 order.getOrderNumber(), order.getProductId(), order.getQuantity());
@@ -130,7 +118,7 @@ public class OrderService {
 
     private OrderResponse toResponse(Order order) {
         return new OrderResponse(
-                order.getId(),
+                order.getId() == null ? null : order.getId().toString(),
                 order.getOrderNumber(),
                 order.getProductId(),
                 order.getQuantity(),
@@ -143,7 +131,7 @@ public class OrderService {
         var orders = orderRepository.findAll();
         log.debug("Retrieved {} orders", orders.size());
         return orders.stream().map(order -> new OrderResponse(
-                order.getId(),
+                order.getId() == null ? null : order.getId().toString(),
                 order.getOrderNumber(),
                 order.getProductId(),
                 order.getQuantity(),

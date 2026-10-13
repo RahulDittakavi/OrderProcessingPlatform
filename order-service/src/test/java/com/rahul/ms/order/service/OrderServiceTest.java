@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -26,9 +27,7 @@ import com.rahul.ms.order.dto.OrderRequest;
 import com.rahul.ms.order.dto.OrderResponse;
 import com.rahul.ms.order.dto.ProductResponse;
 import com.rahul.ms.order.entity.Order;
-import com.rahul.ms.order.entity.OrderEventOutbox;
 import com.rahul.ms.order.entity.OrderStatus;
-import com.rahul.ms.order.repository.OrderEventOutboxRepository;
 import com.rahul.ms.order.repository.OrderRepository;
 import org.mockito.InOrder;
 import org.springframework.http.HttpHeaders;
@@ -54,7 +53,7 @@ class OrderServiceTest {
     private InventoryClient inventoryClient;
 
     @Mock
-    private OrderEventOutboxRepository orderEventOutboxRepository;
+    private OrderPersistenceService orderPersistenceService;
 
     @InjectMocks
     private OrderService orderService;
@@ -72,16 +71,19 @@ class OrderServiceTest {
                         savedOrderNumbers.add(savedOrder.getOrderNumber());
                         return savedOrder;
                 });
-        when(orderEventOutboxRepository.save(any(OrderEventOutbox.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderPersistenceService.confirmAndEnqueue(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setStatus(OrderStatus.CONFIRMED);
+            savedStatuses.add(OrderStatus.CONFIRMED);
+            return order;
+        });
 
         OrderResponse response = orderService.placeOrder(new OrderRequest("product-123", 2, null), "request-123");
 
         InOrder sequence = inOrder(orderRepository, inventoryClient);
         sequence.verify(orderRepository).save(any(Order.class));
         sequence.verify(inventoryClient).reduceStock(eq(savedOrderNumbers.get(0)), eq("sku-456"), eq(2));
-        sequence.verify(orderRepository).save(any(Order.class));
-        verify(orderEventOutboxRepository).save(any(OrderEventOutbox.class));
+        verify(orderPersistenceService).confirmAndEnqueue(any(Order.class));
         assertEquals(List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED), savedStatuses);
         assertEquals(OrderStatus.CONFIRMED, response.status());
     }
@@ -111,7 +113,7 @@ class OrderServiceTest {
                 org.mockito.ArgumentMatchers.eq(2));
         sequence.verify(orderRepository).save(any(Order.class));
         assertEquals(List.of(OrderStatus.PENDING, OrderStatus.REJECTED), savedStatuses);
-        verifyNoInteractions(orderEventOutboxRepository);
+        verifyNoInteractions(orderPersistenceService);
     }
 
     @Test
@@ -134,7 +136,7 @@ class OrderServiceTest {
 
         verify(orderRepository).save(any(Order.class));
         assertEquals(List.of(OrderStatus.PENDING), savedStatuses);
-        verifyNoInteractions(orderEventOutboxRepository);
+        verifyNoInteractions(orderPersistenceService);
     }
 
     @Test
@@ -144,14 +146,14 @@ class OrderServiceTest {
         assertThrows(RuntimeException.class,
                 () -> orderService.placeOrder(new OrderRequest("missing-product", 2, null), "request-123"));
 
-        verifyNoInteractions(inventoryClient, orderEventOutboxRepository);
+        verifyNoInteractions(inventoryClient, orderPersistenceService);
         verify(orderRepository, never()).save(any(Order.class));
     }
 
     @Test
     void returnsPreviouslyCreatedOrderForSameKeyAndRequest() {
         Order existingOrder = Order.builder()
-                .id("order-id")
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .idempotencyKey("request-123")
                 .orderNumber("order-number")
                 .productId("product-123")
@@ -164,17 +166,17 @@ class OrderServiceTest {
         OrderResponse response = orderService.placeOrder(
                 new OrderRequest("product-123", 2, null), "request-123");
 
-        assertEquals("order-id", response.id());
+        assertEquals("00000000-0000-0000-0000-000000000001", response.id());
         assertEquals("order-number", response.orderNumber());
         assertEquals(OrderStatus.CONFIRMED, response.status());
-        verifyNoInteractions(productClient, inventoryClient, orderEventOutboxRepository);
+        verifyNoInteractions(productClient, inventoryClient, orderPersistenceService);
         verify(orderRepository, never()).save(any(Order.class));
     }
 
     @Test
     void retriesInventoryReservationForPreviouslyPendingOrder() {
         Order pendingOrder = Order.builder()
-                .id("order-id")
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .idempotencyKey("request-123")
                 .orderNumber("original-order-number")
                 .productId("product-123")
@@ -186,15 +188,17 @@ class OrderServiceTest {
         when(productClient.getProductById("product-123")).thenReturn(Optional.of(
                 new ProductResponse("product-123", "sku-456", "Keyboard", "Mechanical keyboard",
                         new BigDecimal("49.99"))));
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(orderEventOutboxRepository.save(any(OrderEventOutbox.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderPersistenceService.confirmAndEnqueue(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setStatus(OrderStatus.CONFIRMED);
+            return order;
+        });
 
         OrderResponse response = orderService.placeOrder(
                 new OrderRequest("product-123", 2, null), "request-123");
 
         verify(inventoryClient).reduceStock("original-order-number", "sku-456", 2);
-        verify(orderEventOutboxRepository).save(any(OrderEventOutbox.class));
+        verify(orderPersistenceService).confirmAndEnqueue(any(Order.class));
         assertEquals(OrderStatus.CONFIRMED, response.status());
         assertEquals(OrderStatus.CONFIRMED, pendingOrder.getStatus());
     }
@@ -212,13 +216,13 @@ class OrderServiceTest {
         assertThrows(IdempotencyKeyConflictException.class,
                 () -> orderService.placeOrder(new OrderRequest("product-123", 3, null), "request-123"));
 
-        verifyNoInteractions(productClient, inventoryClient, orderEventOutboxRepository);
+        verifyNoInteractions(productClient, inventoryClient, orderPersistenceService);
     }
 
     @Test
     void returnsConcurrentlyCreatedOrderWhenUniqueIndexRejectsDuplicateKey() {
         Order existingOrder = Order.builder()
-                .id("order-id")
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .idempotencyKey("request-123")
                 .orderNumber("order-number")
                 .productId("product-123")
@@ -237,8 +241,8 @@ class OrderServiceTest {
         OrderResponse response = orderService.placeOrder(
                 new OrderRequest("product-123", 2, null), "request-123");
 
-        assertEquals("order-id", response.id());
+        assertEquals("00000000-0000-0000-0000-000000000001", response.id());
         assertEquals("order-number", response.orderNumber());
-        verifyNoInteractions(inventoryClient, orderEventOutboxRepository);
+        verifyNoInteractions(inventoryClient, orderPersistenceService);
     }
 }

@@ -1,6 +1,6 @@
 # Backend Development Path: Order Processing Platform
 
-This project is your laboratory for learning backend development with Java 21, Spring Boot, MongoDB, PostgreSQL, Kafka, Eureka, and Spring Cloud Gateway. Work through the labs in order. For every lab, make one small change, run a focused test, and write down what you observed.
+This project is your laboratory for learning backend development with Java 21, Spring Boot, PostgreSQL, Kafka, Eureka, and Spring Cloud Gateway. Work through the labs in order. For every lab, make one small change, run a focused test, and write down what you observed.
 
 ## 1. Start With A Baseline
 
@@ -58,16 +58,16 @@ HTTP client
   -> ProductController
   -> ProductService
   -> ProductRepository
-  -> MongoDB
+  -> PostgreSQL
 ```
 
 Questions to answer:
 
 - Which class decides the URL and HTTP method?
-- Which layer knows MongoDB exists?
+- Which layer knows PostgreSQL exists?
 - Where is input validation performed?
 - What response is returned for an unknown product ID?
-- What should happen if MongoDB is unavailable?
+- What should happen if PostgreSQL is unavailable?
 
 Useful endpoints include `/swagger-ui.html` and `/actuator/health` on each service port.
 
@@ -98,8 +98,7 @@ Learn: controller responsibilities, dependency injection, separation of concerns
 
 Compare the product and inventory services:
 
-- Product uses MongoDB and a document repository.
-- Inventory uses PostgreSQL and JPA.
+- Both use PostgreSQL and JPA repositories.
 
 Add an inventory lookup test, then explain when a relational database is more useful than a document database. Inspect the database records after a request instead of trusting only the Java response.
 
@@ -110,10 +109,10 @@ Learn: schemas, indexes, transactions, repository methods, and the cost of choos
 Seed inventory, create a product, then place an order through `/api/orders`. Trace this path in [OrderService](../order-service/src/main/java/com/rahul/ms/order/service/OrderService.java):
 
 1. Fetch the product through `ProductClient`.
-2. Save the order as `PENDING` in MongoDB.
+2. Save the order as `PENDING` in PostgreSQL.
 3. Reserve stock through `InventoryClient` using the product's SKU.
 4. Mark explicit reservation rejections as `REJECTED`; successful reservations become `CONFIRMED`.
-5. Save an outbox record for a confirmed order.
+5. In one transaction, save the confirmed order and its outbox record.
 
 Try an order larger than available stock. Verify that the reservation fails and inspect whether the final state is consistent.
 If the reservation request times out, the order remains `PENDING` because the inventory result is unknown; reconciliation is a follow-up reliability task.
@@ -181,7 +180,7 @@ Use the narrowest test that proves the behavior:
 
 1. Unit test: one class with collaborators mocked.
 2. MVC test: controller status codes and JSON contracts.
-3. Repository/integration test: real MongoDB or PostgreSQL behavior.
+3. Repository/integration test: PostgreSQL behavior.
 4. Service integration test: multiple Spring components together.
 5. End-to-end test: gateway through persistence and messaging.
 6. Concurrency test: multiple requests competing for the same stock.

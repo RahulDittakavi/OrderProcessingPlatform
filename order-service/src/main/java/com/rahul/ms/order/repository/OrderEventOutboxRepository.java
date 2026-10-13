@@ -1,14 +1,22 @@
 package com.rahul.ms.order.repository;
 
-import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import com.rahul.ms.order.entity.OrderEventOutbox;
 
-public interface OrderEventOutboxRepository extends MongoRepository<OrderEventOutbox, String> {
+public interface OrderEventOutboxRepository extends JpaRepository<OrderEventOutbox, UUID> {
 
-    List<OrderEventOutbox> findTop100ByPublishedFalseAndNextAttemptAtLessThanEqualOrderByNextAttemptAtAsc(
-            Instant now);
+    @Query(value = """
+            SELECT *
+            FROM outbox_events
+            WHERE status = 'PENDING'
+            ORDER BY created_at ASC
+            LIMIT 100
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    List<OrderEventOutbox> lockNextPendingEvents();
 }
