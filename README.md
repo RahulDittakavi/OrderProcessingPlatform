@@ -61,8 +61,9 @@ idempotent.
 - Spring Cloud Gateway, Eureka, and LoadBalancer.
 - PostgreSQL for products, orders/outbox data, and inventory (separate databases).
 - Apache Kafka for order events.
+- Prometheus and Grafana for application metrics and dashboards.
 - A local PostgreSQL installation for application data; Docker Compose for Kafka
-  and other infrastructure.
+  and monitoring infrastructure.
 - Static HTML, CSS, and JavaScript for the Order Desk.
 
 ## Run locally
@@ -99,6 +100,15 @@ The script starts Compose-managed infrastructure, builds the services, then
 launches Eureka, the application services, and the API gateway. Open
 `http://localhost:9000/` to use the Order Desk.
 
+Prometheus is available at `http://localhost:9090`, and Grafana is available
+at `http://localhost:3000` (default local login: `admin` / `admin`). The
+pre-provisioned **Order Processing Platform** dashboard is in the **Platform**
+folder. Set `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` before starting
+Compose to override the local Grafana credentials. Prometheus scrapes
+`/actuator/prometheus` from the gateway, discovery server, and all three
+application services. The local monitoring containers use host networking so
+Prometheus can scrape Spring services running directly on the Linux host.
+
 Stop this project's services and containers with:
 
 ```bash
@@ -121,6 +131,7 @@ overrides include:
 | `EUREKA_URL` | Eureka registry URL. |
 | `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address used by Order Service. |
 | `KAFKA_ADVERTISED_HOST` | Host advertised by the Compose Kafka broker. |
+| `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | Local Grafana login; defaults to `admin` / `admin`. |
 | `FLYWAY_BASELINE_ON_MIGRATE` | Set to `true` only when upgrading an existing inventory database that has schema objects but no Flyway history. |
 
 Do not commit a `.env` file or production credentials.
