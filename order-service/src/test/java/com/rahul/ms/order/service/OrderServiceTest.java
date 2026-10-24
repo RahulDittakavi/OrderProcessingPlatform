@@ -62,6 +62,7 @@ class OrderServiceTest {
     void persistsPendingBeforeReservationAndConfirmsAfterSuccess() {
                 List<OrderStatus> savedStatuses = new ArrayList<>();
                 List<String> savedOrderNumbers = new ArrayList<>();
+                List<Order> savedOrders = new ArrayList<>();
         when(productClient.getProductById("product-123")).thenReturn(Optional.of(
                 new ProductResponse("product-123", "sku-456", "Keyboard", "Mechanical keyboard",
                         new BigDecimal("49.99"))));
@@ -69,6 +70,7 @@ class OrderServiceTest {
                         Order savedOrder = invocation.getArgument(0);
                         savedStatuses.add(savedOrder.getStatus());
                         savedOrderNumbers.add(savedOrder.getOrderNumber());
+                        savedOrders.add(savedOrder);
                         return savedOrder;
                 });
         when(orderPersistenceService.confirmAndEnqueue(any(Order.class))).thenAnswer(invocation -> {
@@ -86,6 +88,7 @@ class OrderServiceTest {
         verify(orderPersistenceService).confirmAndEnqueue(any(Order.class));
         assertEquals(List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED), savedStatuses);
         assertEquals(OrderStatus.CONFIRMED, response.status());
+        assertEquals("sku-456", savedOrders.get(0).getProductSkuCode());
     }
 
     @Test
@@ -180,6 +183,34 @@ class OrderServiceTest {
                 .idempotencyKey("request-123")
                 .orderNumber("original-order-number")
                 .productId("product-123")
+                .productSkuCode("sku-456")
+                .quantity(2)
+                .price(new BigDecimal("99.98"))
+                .status(OrderStatus.PENDING)
+                .build();
+        when(orderRepository.findByIdempotencyKey("request-123")).thenReturn(Optional.of(pendingOrder));
+        when(orderPersistenceService.confirmAndEnqueue(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setStatus(OrderStatus.CONFIRMED);
+            return order;
+        });
+
+        OrderResponse response = orderService.placeOrder(
+                new OrderRequest("product-123", 2, null), "request-123");
+
+        verify(inventoryClient).reduceStock("original-order-number", "sku-456", 2);
+        verify(orderPersistenceService).confirmAndEnqueue(any(Order.class));
+        verifyNoInteractions(productClient);
+        assertEquals(OrderStatus.CONFIRMED, response.status());
+        assertEquals(OrderStatus.CONFIRMED, pendingOrder.getStatus());
+    }
+
+    @Test
+    void recordsSkuWhenRecoveringLegacyPendingOrder() {
+        Order pendingOrder = Order.builder()
+                .idempotencyKey("request-123")
+                .orderNumber("original-order-number")
+                .productId("product-123")
                 .quantity(2)
                 .price(new BigDecimal("99.98"))
                 .status(OrderStatus.PENDING)
@@ -194,13 +225,11 @@ class OrderServiceTest {
             return order;
         });
 
-        OrderResponse response = orderService.placeOrder(
-                new OrderRequest("product-123", 2, null), "request-123");
+        orderService.placeOrder(new OrderRequest("product-123", 2, null), "request-123");
 
+        verify(orderRepository).save(pendingOrder);
+        assertEquals("sku-456", pendingOrder.getProductSkuCode());
         verify(inventoryClient).reduceStock("original-order-number", "sku-456", 2);
-        verify(orderPersistenceService).confirmAndEnqueue(any(Order.class));
-        assertEquals(OrderStatus.CONFIRMED, response.status());
-        assertEquals(OrderStatus.CONFIRMED, pendingOrder.getStatus());
     }
 
     @Test

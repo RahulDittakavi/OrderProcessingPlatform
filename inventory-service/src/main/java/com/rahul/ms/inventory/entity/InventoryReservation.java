@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
 public class InventoryReservation {
 
     @Id
-    @Column(name = "reservation_id", nullable = false, length = 36)
+    @Column(name = "reservation_id", nullable = false, length = 128)
     private String reservationId;
 
     @Column(name = "sku_code", nullable = false)

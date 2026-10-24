@@ -50,6 +50,7 @@ public class OrderService {
                 .idempotencyKey(idempotencyKey)
                 .orderNumber(UUID.randomUUID().toString())
                 .productId(orderRequest.productId())
+                .productSkuCode(productResponse.skuCode())
                 .quantity(orderRequest.quantity())
                 .price(productResponse.price().multiply(BigDecimal.valueOf(orderRequest.quantity())))
                 .status(OrderStatus.PENDING)
@@ -104,6 +105,11 @@ public class OrderService {
             throw new IllegalArgumentException("Inventory reservation was rejected");
         }
         if (order.getStatus() == OrderStatus.PENDING) {
+            if (order.getProductSkuCode() != null) {
+                log.info("Resuming pending order using saved SKU orderNumber={}", order.getOrderNumber());
+                return reserveAndConfirm(order, order.getProductSkuCode());
+            }
+
             var product = productClient.getProductById(order.getProductId())
                     .orElseThrow(() -> {
                         log.warn("Unable to resume pending order: product not found orderNumber={} productId={}",
@@ -111,6 +117,8 @@ public class OrderService {
                         return new RuntimeException("Product not found with ID: " + order.getProductId());
                     });
             log.info("Resuming pending order orderNumber={}", order.getOrderNumber());
+            order.setProductSkuCode(product.skuCode());
+            orderRepository.save(order);
             return reserveAndConfirm(order, product.skuCode());
         }
         return toResponse(order);

@@ -47,7 +47,8 @@ Order creation is idempotent: repeating a request with the same key and order
 details returns the existing order instead of reserving stock again. Reusing
 the key with a different product or quantity returns `409 Conflict`.
 Inventory reservations also use an idempotency key to prevent a duplicate
-reservation.
+reservation. Both order and inventory idempotency keys must be non-blank and
+at most 128 characters.
 
 The Order Service saves confirmed orders and their outbox events atomically in
 PostgreSQL. A scheduled publisher claims pending outbox rows with

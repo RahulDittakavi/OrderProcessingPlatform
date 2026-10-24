@@ -32,6 +32,8 @@ public class Order {
     private String orderNumber;
     @Column(name = "product_id", nullable = false)
     private String productId;
+    @Column(name = "product_sku_code")
+    private String productSkuCode;
     @Column(nullable = false)
     private int quantity;
     @Column(nullable = false, precision = 19, scale = 2)

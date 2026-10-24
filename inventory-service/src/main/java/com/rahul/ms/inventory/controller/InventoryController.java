@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
 
 import com.rahul.ms.inventory.dto.InventoryResponse;
@@ -44,7 +45,7 @@ public class InventoryController {
 
     @PutMapping("/reduce-stock")
     @ResponseStatus(HttpStatus.OK)
-    public void reduceStock(@RequestHeader("Idempotency-Key") @NotBlank String reservationId,
+    public void reduceStock(@RequestHeader("Idempotency-Key") @NotBlank @Size(max = 128) String reservationId,
                             @RequestParam("skuCode") @NotBlank String skuCode,
                             @RequestParam("quantity") @Positive int quantity) {
         inventoryService.reduceStock(reservationId, skuCode, quantity);
