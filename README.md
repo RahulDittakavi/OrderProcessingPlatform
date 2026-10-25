@@ -154,3 +154,21 @@ into Postman to try the APIs through the gateway. The collection defaults to
 Create a product with the seeded `iphone_15` inventory SKU before placing an
 order. The create request stores the returned product ID for the later requests.
 The delete-product request removes the product from the catalog.
+
+## Continuous integration and database tests
+
+The GitHub Actions workflow at `.github/workflows/ci.yml` builds and verifies
+all five services on pushes to `main`, pull requests, and manual runs. The
+order-service test suite includes a Testcontainers integration test that starts
+PostgreSQL, applies the real Flyway migrations, validates the Hibernate schema,
+and checks order persistence. Running that test locally requires Docker:
+
+```bash
+cd order-service
+./mvnw -Dapi.version=1.40 -Dtest=OrderPostgresIntegrationTest test
+```
+
+The complete CI verification can also be run locally by running
+`./mvnw verify` inside each service directory. For `order-service`, use
+`./mvnw -Dapi.version=1.40 verify` when your Docker engine requires API 1.40 or
+newer.
