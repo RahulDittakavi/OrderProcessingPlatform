@@ -84,3 +84,4 @@ eureka:
 order:
   events:
     publisher-delay: ${ORDER_EVENTS_PUBLISHER_DELAY:5000}
+    max-retries: ${ORDER_EVENTS_MAX_RETRIES:5}

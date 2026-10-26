@@ -75,6 +75,21 @@ class OrderEventPublisherTest {
     }
 
     @Test
+    void marksEventFailedWhenMaxRetryCountIsReached() {
+        OrderEventOutbox outbox = pendingEvent();
+        outbox.setRetryCount(4);
+        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
+
+        publisher.publishPendingEvents();
+
+        assertEquals(OutboxEventStatus.FAILED, outbox.getStatus());
+        assertEquals(5, outbox.getRetryCount());
+        verify(outboxRepository).save(outbox);
+    }
+
+    @Test
     void stopsPublishingBatchAfterKafkaFailure() {
         OrderEventOutbox failedEvent = pendingEvent();
         OrderEventOutbox nextEvent = pendingEvent();

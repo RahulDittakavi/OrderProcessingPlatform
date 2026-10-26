@@ -10,6 +10,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import com.rahul.ms.order.entity.OrderEventOutbox;
 import com.rahul.ms.order.entity.OutboxEventStatus;
@@ -26,6 +27,9 @@ public class OrderEventPublisher {
 
     private final OrderEventOutboxRepository outboxRepository;
     private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
+
+    @Value("${order.events.max-retries:5}")
+    private int maxRetryCount = 5;
 
     @Scheduled(
             fixedDelayString = "${order.events.publisher-delay:5000}",
@@ -63,8 +67,11 @@ public class OrderEventPublisher {
 
     private void recordFailure(OrderEventOutbox outbox, Exception exception) {
         outbox.setRetryCount(outbox.getRetryCount() + 1);
+        if (outbox.getRetryCount() >= maxRetryCount) {
+            outbox.setStatus(OutboxEventStatus.FAILED);
+        }
         outboxRepository.save(outbox);
-        log.error("Failed to publish order event aggregateId={} retryCount={}",
-                outbox.getAggregateId(), outbox.getRetryCount(), exception);
+        log.error("Failed to publish order event aggregateId={} retryCount={} status={}",
+                outbox.getAggregateId(), outbox.getRetryCount(), outbox.getStatus(), exception);
     }
 }
