@@ -2,6 +2,8 @@ package com.rahul.ms.order.service;
 
 import java.time.Instant;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -40,7 +42,8 @@ public class OrderEventPublisher {
     private boolean publish(OrderEventOutbox outbox) {
         try {
             var result = kafkaTemplate.send(
-                    "order-placed-topic", outbox.getAggregateId(), outbox.getPayload()).get();
+                    "order-placed-topic", outbox.getAggregateId(), outbox.getPayload())
+                    .get(5, TimeUnit.SECONDS);
             outbox.setStatus(OutboxEventStatus.SENT);
             outbox.setSentAt(Instant.now());
             outboxRepository.save(outbox);
@@ -52,9 +55,9 @@ public class OrderEventPublisher {
             Thread.currentThread().interrupt();
             recordFailure(outbox, exception);
             return false;
-        } catch (ExecutionException | KafkaException exception) {
+        } catch (ExecutionException | TimeoutException | KafkaException exception) {
             recordFailure(outbox, exception);
-            return true;
+            return false;
         }
     }
 

@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.junit.jupiter.api.Test;
@@ -69,6 +71,39 @@ class OrderEventPublisherTest {
 
         assertEquals(OutboxEventStatus.PENDING, outbox.getStatus());
         assertEquals(1, outbox.getRetryCount());
+        verify(outboxRepository).save(outbox);
+    }
+
+    @Test
+    void stopsPublishingBatchAfterKafkaFailure() {
+        OrderEventOutbox failedEvent = pendingEvent();
+        OrderEventOutbox nextEvent = pendingEvent();
+        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(failedEvent, nextEvent));
+        when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
+
+        publisher.publishPendingEvents();
+
+        verify(kafkaTemplate).send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class));
+        assertEquals(1, failedEvent.getRetryCount());
+        assertEquals(0, nextEvent.getRetryCount());
+    }
+
+    @Test
+    void incrementsRetryCountWhenKafkaAcknowledgementTimesOut() throws Exception {
+        OrderEventOutbox outbox = pendingEvent();
+        @SuppressWarnings("unchecked")
+        CompletableFuture<SendResult<String, OrderPlacedEvent>> timedOutFuture = mock(CompletableFuture.class);
+        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
+                .thenReturn(timedOutFuture);
+        when(timedOutFuture.get(5, TimeUnit.SECONDS)).thenThrow(new TimeoutException("ack timeout"));
+
+        publisher.publishPendingEvents();
+
+        assertEquals(OutboxEventStatus.PENDING, outbox.getStatus());
+        assertEquals(1, outbox.getRetryCount());
+        verify(timedOutFuture).get(5, TimeUnit.SECONDS);
         verify(outboxRepository).save(outbox);
     }
 
