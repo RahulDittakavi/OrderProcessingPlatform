@@ -206,6 +206,33 @@ class OrderServiceTest {
     }
 
     @Test
+    void reconcilesStalePendingOrderUsingItsSavedSkuAndReservationKey() {
+        UUID orderId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Order pendingOrder = Order.builder()
+                .id(orderId)
+                .orderNumber("original-order-number")
+                .productId("product-123")
+                .productSkuCode("sku-456")
+                .quantity(2)
+                .price(new BigDecimal("99.98"))
+                .status(OrderStatus.PENDING)
+                .build();
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(pendingOrder));
+        when(orderPersistenceService.confirmAndEnqueue(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setStatus(OrderStatus.CONFIRMED);
+            return order;
+        });
+
+        orderService.reconcileStalePendingOrder(orderId);
+
+        verify(inventoryClient).reduceStock("original-order-number", "sku-456", 2);
+        verify(orderPersistenceService).confirmAndEnqueue(pendingOrder);
+        assertEquals(OrderStatus.CONFIRMED, pendingOrder.getStatus());
+        verifyNoInteractions(productClient);
+    }
+
+    @Test
     void recordsSkuWhenRecoveringLegacyPendingOrder() {
         Order pendingOrder = Order.builder()
                 .idempotencyKey("request-123")

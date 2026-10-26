@@ -63,12 +63,15 @@ public class InventoryService {
             throw new IllegalArgumentException("Quantity must be positive");
         }
 
-        var existingReservation = reservationRepository.findById(reservationId);
+        var existingReservation = reservationRepository.findByReservationIdForUpdate(reservationId);
         if (existingReservation.isPresent()) {
             InventoryReservation reservation = existingReservation.get();
             if (!reservation.getSkuCode().equals(skuCode) || reservation.getQuantity() != quantity) {
                 log.warn("Reservation key reused with different details skuCode={} quantity={}", skuCode, quantity);
                 throw new IllegalArgumentException("Reservation ID was already used with a different request");
+            }
+            if (reservation.isReleased()) {
+                throw new IllegalStateException("Reservation has already been released");
             }
             log.info("Replayed inventory reservation skuCode={} quantity={}", skuCode, quantity);
             return;
@@ -87,4 +90,27 @@ public class InventoryService {
                 .build());
         log.info("Reserved {} units for skuCode: {}", quantity, skuCode);
     }
+
+    @Transactional
+    public void releaseStock(String reservationId) {
+        if (reservationId == null || reservationId.isBlank()) {
+            throw new IllegalArgumentException("Reservation ID is required");
+        }
+
+        InventoryReservation reservation = reservationRepository.findByReservationIdForUpdate(reservationId)
+                .orElseThrow(() -> new IllegalArgumentException("Reservation was not found"));
+        if (reservation.isReleased()) {
+            log.info("Replayed inventory release reservationId={}", reservationId);
+            return;
+        }
+
+        int updatedRows = inventoryRepository.releaseStock(reservation.getSkuCode(), reservation.getQuantity());
+        if (updatedRows == 0) {
+            throw new IllegalStateException("Inventory not found for reservation " + reservationId);
+        }
+        reservation.setReleased(true);
+        reservationRepository.save(reservation);
+        log.info("Released {} units for skuCode={} reservationId={}",
+                reservation.getQuantity(), reservation.getSkuCode(), reservationId);
     }
+}

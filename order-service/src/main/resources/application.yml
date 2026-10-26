@@ -85,3 +85,7 @@ order:
   events:
     publisher-delay: ${ORDER_EVENTS_PUBLISHER_DELAY:5000}
     max-retries: ${ORDER_EVENTS_MAX_RETRIES:5}
+  reconciliation:
+    delay-ms: ${ORDER_RECONCILIATION_DELAY_MS:60000}
+    initial-delay-ms: ${ORDER_RECONCILIATION_INITIAL_DELAY_MS:60000}
+    stale-after-ms: ${ORDER_RECONCILIATION_STALE_AFTER_MS:300000}

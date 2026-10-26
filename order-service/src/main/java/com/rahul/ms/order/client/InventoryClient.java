@@ -68,4 +68,22 @@ public class InventoryClient {
             throw exception;
         }
     }
+
+    public void releaseStock(String reservationId) {
+        String uri = UriComponentsBuilder.fromUriString(inventoryServiceUrl + "/api/inventory/release-stock")
+                .toUriString();
+
+        log.debug("Requesting inventory release reservationId={}", reservationId);
+        try {
+            restClientBuilder.build()
+                    .put()
+                    .uri(uri)
+                    .header("Idempotency-Key", reservationId)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException exception) {
+            log.error("Inventory release request failed reservationId={}", reservationId, exception);
+            throw exception;
+        }
+    }
 }

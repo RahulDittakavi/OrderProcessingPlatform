@@ -42,7 +42,8 @@ class InventoryServiceTest {
 
         @Test
         void repeatedReservationDoesNotDecrementStockAgain() {
-        when(reservationRepository.findById("order-1")).thenReturn(Optional.of(InventoryReservation.builder()
+        when(reservationRepository.findByReservationIdForUpdate("order-1"))
+                .thenReturn(Optional.of(InventoryReservation.builder()
             .reservationId("order-1")
             .skuCode("sku-1")
             .quantity(3)
@@ -56,7 +57,8 @@ class InventoryServiceTest {
 
         @Test
         void rejectsReusingReservationIdForDifferentRequest() {
-        when(reservationRepository.findById("order-1")).thenReturn(Optional.of(InventoryReservation.builder()
+        when(reservationRepository.findByReservationIdForUpdate("order-1"))
+                .thenReturn(Optional.of(InventoryReservation.builder()
             .reservationId("order-1")
             .skuCode("sku-1")
             .quantity(3)
@@ -83,5 +85,55 @@ class InventoryServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new InventoryService(inventoryRepository, reservationRepository)
                     .reduceStock("order-1", "sku-1", 3));
+    }
+
+    @Test
+    void releasesReservationAndRestoresStockOnce() {
+        InventoryReservation reservation = InventoryReservation.builder()
+                .reservationId("order-1")
+                .skuCode("sku-1")
+                .quantity(3)
+                .build();
+        when(reservationRepository.findByReservationIdForUpdate("order-1"))
+                .thenReturn(Optional.of(reservation));
+        when(inventoryRepository.releaseStock("sku-1", 3)).thenReturn(1);
+
+        new InventoryService(inventoryRepository, reservationRepository).releaseStock("order-1");
+
+        verify(inventoryRepository).releaseStock("sku-1", 3);
+        verify(reservationRepository).save(argThat(saved -> saved.isReleased()));
+    }
+
+    @Test
+    void repeatedReleaseDoesNotRestoreStockTwice() {
+        InventoryReservation reservation = InventoryReservation.builder()
+                .reservationId("order-1")
+                .skuCode("sku-1")
+                .quantity(3)
+                .released(true)
+                .build();
+        when(reservationRepository.findByReservationIdForUpdate("order-1"))
+                .thenReturn(Optional.of(reservation));
+
+        new InventoryService(inventoryRepository, reservationRepository).releaseStock("order-1");
+
+        verify(inventoryRepository, never()).releaseStock("sku-1", 3);
+        verify(reservationRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void rejectsReservationAfterItWasReleased() {
+        when(reservationRepository.findByReservationIdForUpdate("order-1"))
+                .thenReturn(Optional.of(InventoryReservation.builder()
+                    .reservationId("order-1")
+                    .skuCode("sku-1")
+                    .quantity(3)
+                    .released(true)
+                    .build()));
+
+        assertThrows(IllegalStateException.class,
+                () -> new InventoryService(inventoryRepository, reservationRepository)
+                    .reduceStock("order-1", "sku-1", 3));
+        verify(inventoryRepository, never()).reserveStock("sku-1", 3);
     }
 }

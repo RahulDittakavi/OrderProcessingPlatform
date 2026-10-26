@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,12 +41,14 @@ class OrderPersistenceServiceTest {
     @Test
     void confirmsOrderAndPersistsItsOutboxEventTransactionally() throws Exception {
         Order order = Order.builder()
+                .id(UUID.randomUUID())
                 .orderNumber("order-123")
                 .productId("product-456")
                 .quantity(2)
                 .price(new BigDecimal("20.00"))
                 .status(OrderStatus.PENDING)
                 .build();
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
         when(orderRepository.save(order)).thenReturn(order);
         when(outboxRepository.save(any(OrderEventOutbox.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -63,5 +68,21 @@ class OrderPersistenceServiceTest {
         assertNotNull(OrderPersistenceService.class
                 .getMethod("confirmAndEnqueue", Order.class)
                 .getAnnotation(Transactional.class));
+    }
+
+    @Test
+    void doesNotEnqueueAnotherEventForAlreadyConfirmedOrder() {
+        Order order = Order.builder()
+                .id(UUID.randomUUID())
+                .orderNumber("order-123")
+                .status(OrderStatus.CONFIRMED)
+                .build();
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+
+        Order returnedOrder = persistenceService.confirmAndEnqueue(order);
+
+        assertEquals(OrderStatus.CONFIRMED, returnedOrder.getStatus());
+        verify(orderRepository, never()).save(order);
+        verify(outboxRepository, never()).save(any(OrderEventOutbox.class));
     }
 }

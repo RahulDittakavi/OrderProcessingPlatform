@@ -8,10 +8,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "t_inventory_reservation")
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,4 +28,8 @@ public class InventoryReservation {
 
     @Column(nullable = false)
     private Integer quantity;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean released = false;
 }

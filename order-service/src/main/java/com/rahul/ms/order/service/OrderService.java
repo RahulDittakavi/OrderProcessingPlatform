@@ -83,7 +83,7 @@ public class OrderService {
                     order.getOrderNumber(), skuCode, order.getQuantity(), exception.getStatusCode());
             order.setStatus(OrderStatus.REJECTED);
             orderRepository.save(order);
-            throw new IllegalArgumentException("Inventory reservation was rejected", exception);
+            throw new InventoryReservationRejectedException(exception);
         }
 
         order = orderPersistenceService.confirmAndEnqueue(order);
@@ -105,23 +105,40 @@ public class OrderService {
             throw new IllegalArgumentException("Inventory reservation was rejected");
         }
         if (order.getStatus() == OrderStatus.PENDING) {
-            if (order.getProductSkuCode() != null) {
-                log.info("Resuming pending order using saved SKU orderNumber={}", order.getOrderNumber());
-                return reserveAndConfirm(order, order.getProductSkuCode());
-            }
-
-            var product = productClient.getProductById(order.getProductId())
-                    .orElseThrow(() -> {
-                        log.warn("Unable to resume pending order: product not found orderNumber={} productId={}",
-                                order.getOrderNumber(), order.getProductId());
-                        return new RuntimeException("Product not found with ID: " + order.getProductId());
-                    });
-            log.info("Resuming pending order orderNumber={}", order.getOrderNumber());
-            order.setProductSkuCode(product.skuCode());
-            orderRepository.save(order);
-            return reserveAndConfirm(order, product.skuCode());
+            return resumePendingOrder(order);
         }
         return toResponse(order);
+    }
+
+    public void reconcileStalePendingOrder(UUID orderId) {
+        orderRepository.findById(orderId).ifPresent(order -> {
+            if (order.getStatus() != OrderStatus.PENDING) {
+                return;
+            }
+            try {
+                resumePendingOrder(order);
+            } catch (InventoryReservationRejectedException exception) {
+                log.info("Rejected stale pending order orderNumber={}", order.getOrderNumber());
+            }
+        });
+    }
+
+    private OrderResponse resumePendingOrder(Order order) {
+        if (order.getProductSkuCode() != null) {
+            log.info("Resuming pending order using saved SKU orderNumber={}", order.getOrderNumber());
+            return reserveAndConfirm(order, order.getProductSkuCode());
+        }
+
+        var product = productClient.getProductById(order.getProductId())
+                .orElseThrow(() -> {
+                    log.warn("Unable to resume pending order: product not found orderNumber={} productId={}",
+                            order.getOrderNumber(), order.getProductId());
+                    return new RuntimeException("Product not found with ID: " + order.getProductId());
+                });
+        log.info("Resuming pending order orderNumber={}", order.getOrderNumber());
+        order.setProductSkuCode(product.skuCode());
+        orderRepository.save(order);
+        return reserveAndConfirm(order, product.skuCode());
     }
 
     private OrderResponse toResponse(Order order) {
@@ -146,5 +163,11 @@ public class OrderService {
                 order.getPrice(),
                 order.getStatus()
         )).toList();
+    }
+
+    private static class InventoryReservationRejectedException extends IllegalArgumentException {
+        private InventoryReservationRejectedException(HttpClientErrorException.BadRequest cause) {
+            super("Inventory reservation was rejected", cause);
+        }
     }
 }

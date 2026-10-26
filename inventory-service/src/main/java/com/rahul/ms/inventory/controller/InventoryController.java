@@ -50,4 +50,11 @@ public class InventoryController {
                             @RequestParam("quantity") @Positive int quantity) {
         inventoryService.reduceStock(reservationId, skuCode, quantity);
     }
+
+    @PutMapping("/release-stock")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void releaseStock(
+            @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 128) String reservationId) {
+        inventoryService.releaseStock(reservationId);
+    }
 }

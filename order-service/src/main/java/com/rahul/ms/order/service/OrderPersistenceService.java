@@ -22,8 +22,13 @@ public class OrderPersistenceService {
 
     @Transactional
     public Order confirmAndEnqueue(Order order) {
-        order.setStatus(OrderStatus.CONFIRMED);
-        Order savedOrder = orderRepository.save(order);
+        Order lockedOrder = orderRepository.findByIdForUpdate(order.getId())
+                .orElseThrow(() -> new IllegalStateException("Order not found during confirmation"));
+        if (lockedOrder.getStatus() != OrderStatus.PENDING) {
+            return lockedOrder;
+        }
+        lockedOrder.setStatus(OrderStatus.CONFIRMED);
+        Order savedOrder = orderRepository.save(lockedOrder);
         outboxRepository.save(OrderEventOutbox.builder()
                 .aggregateId(savedOrder.getOrderNumber())
                 .eventType("OrderPlaced")

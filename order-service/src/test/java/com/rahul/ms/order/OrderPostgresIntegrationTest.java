@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,7 +52,7 @@ class OrderPostgresIntegrationTest {
     @Test
     void appliesMigrationsAndPersistsOrdersWithThePostgresSchema() {
         Integer appliedMigrations = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE version IN ('1', '2') AND success",
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE version IN ('1', '2', '3') AND success",
                 Integer.class);
         Integer skuColumnCount = jdbcTemplate.queryForObject(
                 """
@@ -60,8 +61,16 @@ class OrderPostgresIntegrationTest {
                 WHERE table_name = 'orders' AND column_name = 'product_sku_code'
                 """,
                 Integer.class);
-        assertEquals(2, appliedMigrations);
+        Integer createdAtColumnCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_name = 'orders' AND column_name = 'created_at'
+                """,
+                Integer.class);
+        assertEquals(3, appliedMigrations);
         assertEquals(1, skuColumnCount);
+        assertEquals(1, createdAtColumnCount);
 
         Order savedOrder = orderRepository.saveAndFlush(Order.builder()
                 .idempotencyKey("postgres-integration-test")
@@ -77,5 +86,8 @@ class OrderPostgresIntegrationTest {
         assertNotNull(reloadedOrder.getId());
         assertEquals("sku-456", reloadedOrder.getProductSkuCode());
         assertEquals(new BigDecimal("99.98"), reloadedOrder.getPrice());
+        assertNotNull(reloadedOrder.getCreatedAt());
+        assertEquals(1, orderRepository.findTop100ByStatusAndCreatedAtBeforeOrderByCreatedAtAsc(
+                OrderStatus.PENDING, Instant.now().plusSeconds(1)).size());
     }
 }
