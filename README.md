@@ -70,7 +70,7 @@ idempotent.
 ## Run locally
 
 Prerequisites: PostgreSQL installed on the host, Docker Compose, Java 21, and
-`curl`.
+`curl`. Go 1.22 or newer is only required for the optional health-check CLI.
 
 Create the application role and databases in PostgreSQL (set its password
 interactively with `\password orderapp`):
@@ -117,6 +117,21 @@ Stop this project's services and containers with:
 ```
 
 Service logs are written to `logs/`.
+
+### Health-check CLI
+
+The Go CLI checks the health endpoints of all five application services and
+checks connectivity to PostgreSQL, Kafka, Prometheus, and Grafana. Run it from
+the repository root:
+
+```bash
+cd tools/platform-check
+go run . -timeout 3s
+```
+
+Each check has its own timeout. The command exits with status `1` if any
+component is down, so it can also be used in scripts. Run its unit tests with
+`go test ./...` from `tools/platform-check`.
 
 ## Configuration
 
