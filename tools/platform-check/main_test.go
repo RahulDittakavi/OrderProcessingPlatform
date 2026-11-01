@@ -57,6 +57,19 @@ func TestTCPHealthCheck(t *testing.T) {
 	}
 }
 
+func TestDefaultChecksUsesPostgresAddress(t *testing.T) {
+	const postgresAddress = "localhost:5433"
+	for _, check := range defaultChecks(postgresAddress) {
+		if check.name == "PostgreSQL" {
+			if check.endpoint != postgresAddress {
+				t.Fatalf("PostgreSQL endpoint = %q, want %q", check.endpoint, postgresAddress)
+			}
+			return
+		}
+	}
+	t.Fatal("defaultChecks() did not include PostgreSQL")
+}
+
 func TestRunChecksPreservesOrderAndTimesOut(t *testing.T) {
 	checks := []healthCheck{
 		{name: "slow", endpoint: "slow", run: func(ctx context.Context, _ *http.Client) error {

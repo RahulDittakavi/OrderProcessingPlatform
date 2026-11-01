@@ -1,17 +1,12 @@
 #!/usr/bin/env bash
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PID_FILE="$ROOT_DIR/logs/service-pids"
-
-echo "Stopping project Spring Boot services..."
-if [[ -f "$PID_FILE" ]]; then
-	while read -r pid; do
-		[[ -z "$pid" ]] || kill "$pid" 2>/dev/null || true
-	done < "$PID_FILE"
-	rm -f "$PID_FILE"
+COMPOSE_ARGS=(-f "$ROOT_DIR/docker-compose.yaml")
+if [[ -f "$ROOT_DIR/docker-compose.override.yaml" ]]; then
+	COMPOSE_ARGS+=(-f "$ROOT_DIR/docker-compose.override.yaml")
 fi
 
-echo "Stopping Docker containers..."
-docker compose -f "$ROOT_DIR/docker-compose.yaml" down
+echo "Stopping project containers..."
+docker compose "${COMPOSE_ARGS[@]}" down
 
-echo "All services and containers stopped."
+echo "All services and containers stopped. Persistent data volumes were kept."

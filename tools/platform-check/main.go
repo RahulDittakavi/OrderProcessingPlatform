@@ -27,6 +27,7 @@ type checkResult struct {
 
 func main() {
 	timeout := flag.Duration("timeout", 3*time.Second, "maximum time allowed for each health check")
+	postgresAddress := flag.String("postgres-address", "localhost:5433", "host and port for the PostgreSQL TCP check")
 	flag.Parse()
 
 	if *timeout <= 0 {
@@ -35,7 +36,7 @@ func main() {
 	}
 
 	client := &http.Client{Timeout: *timeout}
-	results := runChecks(context.Background(), client, defaultChecks(), *timeout)
+	results := runChecks(context.Background(), client, defaultChecks(*postgresAddress), *timeout)
 
 	failures := 0
 	for _, result := range results {
@@ -58,14 +59,14 @@ func main() {
 	}
 }
 
-func defaultChecks() []healthCheck {
+func defaultChecks(postgresAddress string) []healthCheck {
 	return []healthCheck{
 		httpHealthCheck("API Gateway", "http://localhost:9000/actuator/health", true),
 		httpHealthCheck("Discovery Server", "http://localhost:8761/actuator/health", true),
 		httpHealthCheck("Product Service", "http://localhost:8080/actuator/health", true),
 		httpHealthCheck("Order Service", "http://localhost:8081/actuator/health", true),
 		httpHealthCheck("Inventory Service", "http://localhost:8082/actuator/health", true),
-		tcpHealthCheck("PostgreSQL", "localhost:5432"),
+		tcpHealthCheck("PostgreSQL", postgresAddress),
 		tcpHealthCheck("Kafka", "localhost:9092"),
 		httpHealthCheck("Prometheus", "http://localhost:9090/-/ready", false),
 		httpHealthCheck("Grafana", "http://localhost:3000/api/health", false),

@@ -63,31 +63,20 @@ idempotent.
 - PostgreSQL for products, orders/outbox data, and inventory (separate databases).
 - Apache Kafka for order events.
 - Prometheus and Grafana for application metrics and dashboards.
-- A local PostgreSQL installation for application data; Docker Compose for Kafka
-  and monitoring infrastructure.
+- Docker Compose for PostgreSQL, Kafka, the application services, and monitoring.
 - Static HTML, CSS, and JavaScript for the Order Desk.
 
 ## Run locally
 
-Prerequisites: PostgreSQL installed on the host, Docker Compose, Java 21, and
-`curl`. Go 1.22 or newer is only required for the optional health-check CLI.
+Prerequisites: Docker with the Compose plugin. `curl` is only required for the
+optional health-check CLI. Java 21 and PostgreSQL are not required on the host;
+the application images and database run in containers.
 
-Create the application role and databases in PostgreSQL (set its password
-interactively with `\password orderapp`):
-
-```sql
-CREATE ROLE orderapp WITH LOGIN;
-CREATE DATABASE orderdb OWNER orderapp;
-CREATE DATABASE inventorydb OWNER orderapp;
-CREATE DATABASE productdb OWNER orderapp;
-```
-
-Export the shared credentials before launching the services. `DB_PASSWORD` has
-no default; service database URLs default to the local database names shown
-above and can be overridden independently.
+The local Compose configuration defaults to the `orderapp` database user and
+password. For a different local password, export `DB_PASSWORD` before starting
+the stack:
 
 ```bash
-export DB_USER=orderapp
 export DB_PASSWORD='your-local-orderapp-password'
 ```
 
@@ -97,12 +86,20 @@ Start the infrastructure and services:
 ./start-all.sh
 ```
 
-The script starts Compose-managed infrastructure, builds the services, then
-launches Eureka, the application services, and the API gateway. It waits for
-each service's Actuator health status to become `UP` (up to 120 seconds per
-service) before continuing. On startup failure, it stops the application
-processes it launched and prints recent logs for the service that timed out.
-Open `http://localhost:9000/` to use the Order Desk.
+The script builds the five Java service images and starts the complete stack:
+PostgreSQL, Kafka, Eureka, the application services, Prometheus, and Grafana.
+Compose waits for the database, broker, and application health checks before
+reporting success; if startup fails, the script prints container status and
+recent logs. Open `http://localhost:9000/` to use the Order Desk.
+
+The databases are created automatically on the first startup. PostgreSQL data
+is kept in a named Compose volume when the stack is stopped; `stop-all.sh` does
+not delete it. The services can also be started directly with
+`docker compose up --build --wait`.
+PostgreSQL is published on host port `5433` by default so it can coexist with a
+local PostgreSQL server on `5432`; set `POSTGRES_HOST_PORT` to change the host
+port. The Compose database starts with a fresh volume and does not import data
+from an existing host PostgreSQL instance; that host database is left untouched.
 
 Prometheus is available at `http://localhost:9090`, and Grafana is available
 at `http://localhost:3000` (default local login: `admin` / `admin`). The
@@ -110,8 +107,8 @@ pre-provisioned **Order Processing Platform** dashboard is in the **Platform**
 folder. Set `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` before starting
 Compose to override the local Grafana credentials. Prometheus scrapes
 `/actuator/prometheus` from the gateway, discovery server, and all three
-application services. The local monitoring containers use host networking so
-Prometheus can scrape Spring services running directly on the Linux host.
+application services over the Compose network. Service ports remain published
+on the host for local API access and the health-check CLI.
 
 Stop this project's services and containers with:
 
@@ -119,7 +116,8 @@ Stop this project's services and containers with:
 ./stop-all.sh
 ```
 
-Service logs are written to `logs/`.
+View service logs with `docker compose logs -f <service-name>` (for example,
+`docker compose logs -f order-service`).
 
 ### Health-check CLI
 
@@ -134,7 +132,8 @@ go run . -timeout 3s
 
 Each check has its own timeout. The command exits with status `1` if any
 component is down, so it can also be used in scripts. Run its unit tests with
-`go test ./...` from `tools/platform-check`.
+`go test ./...` from `tools/platform-check`. If PostgreSQL uses a non-default
+host port, pass it with `-postgres-address localhost:<port>`.
 
 ## Configuration
 
@@ -143,17 +142,19 @@ overrides include:
 
 | Variable | Used for |
 | --- | --- |
-| `DB_USER`, `DB_PASSWORD` | Shared PostgreSQL role and password. The password must be supplied. |
-| `ORDER_DB_URL` | Order Service PostgreSQL URL; defaults to `jdbc:postgresql://localhost:5432/orderdb`. |
-| `INVENTORY_DB_URL` | Inventory Service PostgreSQL URL; defaults to `jdbc:postgresql://localhost:5432/inventorydb`. |
-| `PRODUCT_DB_URL` | Product Service PostgreSQL URL; defaults to `jdbc:postgresql://localhost:5432/productdb`. |
-| `EUREKA_URL` | Eureka registry URL. |
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address used by Order Service. |
-| `KAFKA_ADVERTISED_HOST` | Host advertised by the Compose Kafka broker. |
+| `DB_USER`, `DB_PASSWORD` | Compose PostgreSQL credentials; default to `orderapp` for local development. |
+| `POSTGRES_HOST_PORT` | Host port mapped to PostgreSQL's container port 5432; defaults to `5433`. |
+| `ORDER_DB_URL` | Order Service PostgreSQL URL; Compose sets it to `jdbc:postgresql://postgres:5432/orderdb`. |
+| `INVENTORY_DB_URL` | Inventory Service PostgreSQL URL; Compose sets it to `jdbc:postgresql://postgres:5432/inventorydb`. |
+| `PRODUCT_DB_URL` | Product Service PostgreSQL URL; Compose sets it to `jdbc:postgresql://postgres:5432/productdb`. |
+| `EUREKA_URL` | Eureka registry URL; Compose points services to `discovery-server`. |
+| `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address used by Order Service; Compose uses `kafka:29092`. |
+| `KAFKA_ADVERTISED_HOST` | Host advertised by Kafka to clients connecting from outside Compose; defaults to `localhost`. |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | Local Grafana login; defaults to `admin` / `admin`. |
 | `FLYWAY_BASELINE_ON_MIGRATE` | Set to `true` only when upgrading an existing inventory database that has schema objects but no Flyway history. |
 
-Do not commit a `.env` file or production credentials.
+Defaults are for local development only. Set non-default credentials for shared
+environments, and do not commit a `.env` file or production credentials.
 
 All three persistence services apply versioned Flyway migrations on startup and
 check the resulting schema with Hibernate (`ddl-auto=validate`). Existing data
@@ -177,8 +178,9 @@ The delete-product request removes the product from the catalog.
 
 The GitHub Actions workflow at `.github/workflows/ci.yml` builds and verifies
 all five services, runs formatting, vet, and race-enabled tests for the Go
-health-check CLI, and checks startup-script syntax on pushes to `main`, pull
-requests, and manual runs. The order-service test suite includes a
+health-check CLI, checks startup-script syntax, validates Compose, and builds
+the application container images on pushes to `main`, pull requests, and
+manual runs. The order-service test suite includes a
 Testcontainers integration test that starts PostgreSQL, applies the real Flyway
 migrations, validates the Hibernate schema, and checks order persistence.
 Running that test locally requires Docker:

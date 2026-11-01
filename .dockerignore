@@ -1,0 +1,7 @@
+.git
+.github
+**/target
+logs
+.env
+order-service/order-data
+product-service/data
