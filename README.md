@@ -98,8 +98,11 @@ Start the infrastructure and services:
 ```
 
 The script starts Compose-managed infrastructure, builds the services, then
-launches Eureka, the application services, and the API gateway. Open
-`http://localhost:9000/` to use the Order Desk.
+launches Eureka, the application services, and the API gateway. It waits for
+each service's Actuator health status to become `UP` (up to 120 seconds per
+service) before continuing. On startup failure, it stops the application
+processes it launched and prints recent logs for the service that timed out.
+Open `http://localhost:9000/` to use the Order Desk.
 
 Prometheus is available at `http://localhost:9090`, and Grafana is available
 at `http://localhost:3000` (default local login: `admin` / `admin`). The
@@ -173,10 +176,12 @@ The delete-product request removes the product from the catalog.
 ## Continuous integration and database tests
 
 The GitHub Actions workflow at `.github/workflows/ci.yml` builds and verifies
-all five services on pushes to `main`, pull requests, and manual runs. The
-order-service test suite includes a Testcontainers integration test that starts
-PostgreSQL, applies the real Flyway migrations, validates the Hibernate schema,
-and checks order persistence. Running that test locally requires Docker:
+all five services, runs formatting, vet, and race-enabled tests for the Go
+health-check CLI, and checks startup-script syntax on pushes to `main`, pull
+requests, and manual runs. The order-service test suite includes a
+Testcontainers integration test that starts PostgreSQL, applies the real Flyway
+migrations, validates the Hibernate schema, and checks order persistence.
+Running that test locally requires Docker:
 
 ```bash
 cd order-service

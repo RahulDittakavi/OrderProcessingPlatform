@@ -10,6 +10,37 @@ permissions:
   contents: read
 
 jobs:
+  platform-check:
+    name: Verify platform tooling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/platform-check/go.mod
+          cache-dependency-path: tools/platform-check/go.mod
+
+      - name: Check Go formatting
+        working-directory: tools/platform-check
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Vet and test platform checker
+        working-directory: tools/platform-check
+        run: |
+          go vet ./...
+          go test -race ./...
+
+      - name: Check startup scripts
+        run: bash -n start-all.sh stop-all.sh
+
   verify:
     name: Build and test services
     runs-on: ubuntu-latest
