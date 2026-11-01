@@ -20,10 +20,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate Compose configuration
-        run: docker compose -f docker-compose.yaml -f docker-compose.override.yaml config --quiet
+        run: docker compose -f docker-compose.yaml config --quiet
 
       - name: Build application images
-        run: docker compose -f docker-compose.yaml -f docker-compose.override.yaml build
+        run: docker compose -f docker-compose.yaml build
 
   platform-check:
     name: Verify platform tooling
