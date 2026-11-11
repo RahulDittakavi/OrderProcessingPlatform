@@ -1,0 +1,52 @@
+# Used only on the EC2 box:  docker compose -f docker-compose.yaml -f docker-compose.aws.yaml ...
+# Adds: ECR images (instead of building on the box), memory caps, auto-restart.
+x-java-service: &java-service
+  restart: unless-stopped
+  mem_limit: 400m
+  environment:
+    JAVA_OPTS: "-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -Xss512k"
+  healthcheck:
+    interval: 15s
+    timeout: 10s
+    retries: 20
+    start_period: 120s
+
+services:
+  postgres:
+    restart: unless-stopped
+    mem_limit: 256m
+
+  kafka:
+    restart: unless-stopped
+    mem_limit: 640m
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+
+  discovery-server:
+    <<: *java-service
+    image: ${ECR_REPO_URL:?set ECR_REPO_URL}:discovery-server-${IMAGE_TAG:?set IMAGE_TAG}
+
+  product-service:
+    <<: *java-service
+    image: ${ECR_REPO_URL}:product-service-${IMAGE_TAG}
+
+  inventory-service:
+    <<: *java-service
+    image: ${ECR_REPO_URL}:inventory-service-${IMAGE_TAG}
+
+  order-service:
+    <<: *java-service
+    mem_limit: 480m
+    image: ${ECR_REPO_URL}:order-service-${IMAGE_TAG}
+
+  api-gateway:
+    <<: *java-service
+    image: ${ECR_REPO_URL}:api-gateway-${IMAGE_TAG}
+
+  prometheus:
+    restart: unless-stopped
+    mem_limit: 256m
+
+  grafana:
+    restart: unless-stopped
+    mem_limit: 192m

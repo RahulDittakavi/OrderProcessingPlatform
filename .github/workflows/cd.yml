@@ -1,0 +1,151 @@
+name: CD (AWS PoC)
+
+# Manual trigger on purpose: the PoC box is stopped most of the time.
+# Once it works you can add a `workflow_run` trigger on the CI workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      stop_after:
+        description: Stop the EC2 instance after deploying (saves credits)
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+env:
+  DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+permissions:
+  id-token: write # OIDC token for AWS
+  contents: read
+
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    name: Build & push ${{ matrix.service }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        service: [discovery-server, product-service, inventory-service, order-service, api-gateway]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: aws-deploy-pack/Dockerfile
+          platforms: linux/amd64
+          build-args: SERVICE=${{ matrix.service }}
+          push: true
+          provenance: false
+          tags: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ matrix.service }}-${{ env.DEPLOY_SHA }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    name: Deploy to EC2
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      INSTANCE_ID: ${{ vars.INSTANCE_ID }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Start instance and wait for it
+        run: |
+          aws ec2 start-instances --instance-ids "$INSTANCE_ID" >/dev/null
+          aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+          aws ec2 wait instance-status-ok --instance-ids "$INSTANCE_ID"
+          status=""
+          for i in $(seq 1 40); do
+            status=$(aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+              --query 'InstanceInformationList[0].PingStatus' --output text 2>/dev/null || true)
+            [ "$status" = "Online" ] && break
+            echo "Waiting for SSM agent (${i}/40), status: ${status:-none}"
+            sleep 10
+          done
+          [ "$status" = "Online" ] || { echo "SSM agent never came online"; exit 1; }
+
+      - name: Deploy via SSM Run Command
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_REPO_URL="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
+
+          # Unquoted heredoc: ${...} below is filled in HERE, then the script runs on the instance.
+          cat > remote.sh <<SCRIPT
+          set -euo pipefail
+          export HOME=/root
+          cloud-init status --wait || true
+          [ -d /opt/app/.git ] || git clone --no-checkout https://github.com/${GITHUB_REPOSITORY}.git /opt/app
+          cd /opt/app
+          git fetch --depth 1 origin ${DEPLOY_SHA}
+          git checkout -f FETCH_HEAD
+          export AWS_REGION=${AWS_REGION} ECR_REPO_URL=${ECR_REPO_URL} IMAGE_TAG=${DEPLOY_SHA}
+          bash scripts/aws/deploy.sh
+          SCRIPT
+
+          jq -n --rawfile c remote.sh '{commands: [$c], executionTimeout: ["1500"]}' > params.json
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy ${DEPLOY_SHA::7}" \
+            --parameters file://params.json \
+            --query Command.CommandId --output text)
+          echo "SSM command: $CMD_ID"
+
+          status=Pending
+          for i in $(seq 1 90); do
+            status=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 10
+          done
+
+          echo "---- stdout ----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text
+          echo "---- stderr ----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardErrorContent --output text
+          echo "Final status: $status"
+          [ "$status" = "Success" ]
+
+      - name: Print URLs
+        run: |
+          IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          {
+            echo "### Deployed ${DEPLOY_SHA::7}"
+            echo "- Order Desk: http://${IP}:9000/"
+            echo "- Grafana: http://${IP}:3000/"
+            echo "- Eureka: http://${IP}:8761/"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop instance (optional)
+        if: ${{ always() && inputs.stop_after }}
+        run: aws ec2 stop-instances --instance-ids "$INSTANCE_ID" >/dev/null
