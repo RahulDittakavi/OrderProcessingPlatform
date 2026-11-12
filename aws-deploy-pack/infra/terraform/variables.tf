@@ -1,6 +1,7 @@
 variable "region" {
-  type    = string
-  default = "ap-south-1"
+  description = "This AWS account is pinned to the Sydney region."
+  type        = string
+  default     = "ap-southeast-2"
 }
 
 variable "name_prefix" {
@@ -9,7 +10,7 @@ variable "name_prefix" {
 }
 
 variable "instance_type" {
-  description = "4 GB RAM minimum. Pick a type the EC2 console marks as free-plan eligible."
+  description = "4 GB RAM minimum. If the account rejects it, pick another type from the EC2 console."
   type        = string
   default     = "t3.medium"
 }
@@ -27,18 +28,6 @@ variable "allowed_cidr" {
     condition     = can(cidrhost(var.allowed_cidr, 0)) && var.allowed_cidr != "0.0.0.0/0"
     error_message = "Use your own IP like 203.0.113.7/32, not 0.0.0.0/0."
   }
-}
-
-variable "github_repo" {
-  description = "owner/repo that is allowed to deploy via OIDC"
-  type        = string
-  default     = "RahulDittakavi/OrderProcessingPlatform"
-}
-
-variable "create_github_oidc_provider" {
-  description = "Set false if this account already has the GitHub OIDC provider (only one allowed per account)."
-  type        = bool
-  default     = true
 }
 
 variable "enable_auto_stop" {

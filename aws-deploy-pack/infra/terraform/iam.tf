@@ -29,43 +29,15 @@ resource "aws_iam_instance_profile" "ec2" {
   role = aws_iam_role.ec2.name
 }
 
-# ---------- GitHub Actions via OIDC (no stored AWS keys) ----------
-locals {
-  github_oidc_arn = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+# ---------- GitHub Actions deployer ----------
+# Create the access key manually in the console so it never enters Terraform state.
+resource "aws_iam_user" "deployer" {
+  name = "${var.name_prefix}-github-deployer"
 }
 
-resource "aws_iam_openid_connect_provider" "github" {
-  count           = var.create_github_oidc_provider ? 1 : 0
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
-}
-
-resource "aws_iam_role" "github_actions" {
-  name = "${var.name_prefix}-github-actions"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Federated = local.github_oidc_arn }
-      Action    = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringEquals = {
-          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
-        StringLike = {
-          # Only the main branch of this one repo can assume the role.
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main"
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "github_actions" {
+resource "aws_iam_user_policy" "deployer" {
   name = "deploy"
-  role = aws_iam_role.github_actions.id
+  user = aws_iam_user.deployer.name
 
   policy = jsonencode({
     Version = "2012-10-17"

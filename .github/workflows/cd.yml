@@ -1,7 +1,6 @@
 name: CD (AWS PoC)
 
-# Manual trigger on purpose: the PoC box is stopped most of the time.
-# Once it works you can add a `workflow_run` trigger on the CI workflow.
+# Deploy manually or after CI succeeds on main.
 on:
   workflow_dispatch:
     inputs:
@@ -18,7 +17,6 @@ env:
   DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
 permissions:
-  id-token: write # OIDC token for AWS
   contents: read
 
 concurrency:
@@ -41,7 +39,8 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - id: ecr
@@ -72,7 +71,8 @@ jobs:
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Start instance and wait for it
