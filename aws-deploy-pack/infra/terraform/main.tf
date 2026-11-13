@@ -25,7 +25,7 @@ locals {
 
 resource "aws_security_group" "app" {
   name        = "${var.name_prefix}-sg"
-  description = "App ports, restricted to the owner's IP. No SSH: use SSM."
+  description = "App ports restricted to owner IP. No SSH; use SSM."
   vpc_id      = data.aws_vpc.default.id
 
   dynamic "ingress" {
