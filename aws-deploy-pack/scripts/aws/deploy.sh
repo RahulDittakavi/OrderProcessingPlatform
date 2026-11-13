@@ -7,7 +7,7 @@ set -euo pipefail
 export ECR_REPO_URL IMAGE_TAG AWS_REGION
 
 cd /opt/app
-COMPOSE=(docker compose -f docker-compose.yaml -f docker-compose.aws.yaml)
+COMPOSE=(docker compose -f docker-compose.yaml -f aws-deploy-pack/docker-compose.aws.yaml)
 LAST_GOOD=/opt/app/.last_good_tag
 
 # First deploy only: generate secrets so we never run with the default passwords.

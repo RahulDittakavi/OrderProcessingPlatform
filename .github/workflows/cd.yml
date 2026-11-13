@@ -106,7 +106,7 @@ jobs:
           git fetch --depth 1 origin ${DEPLOY_SHA}
           git checkout -f FETCH_HEAD
           export AWS_REGION=${AWS_REGION} ECR_REPO_URL=${ECR_REPO_URL} IMAGE_TAG=${DEPLOY_SHA}
-          bash scripts/aws/deploy.sh
+          bash aws-deploy-pack/scripts/aws/deploy.sh
           SCRIPT
 
           jq -n --rawfile c remote.sh '{commands: [$c], executionTimeout: ["1500"]}' > params.json
