@@ -12,7 +12,7 @@ A browser-based dashboard served by the API gateway at `http://localhost:9000/`.
 It lets you:
 
 - View the product catalog, SKU codes, prices, and available stock.
-- Add products to the catalog.
+- Add products to the catalog and receive stock for each SKU.
 - Place orders and see recent order statuses and totals.
 - Refresh the dashboard data.
 
@@ -24,7 +24,7 @@ It lets you:
 | Discovery Server | 8761 | Eureka registry used by the gateway and services. |
 | Product Service | 8080 | Creates, lists, reads, updates, and deletes products stored in PostgreSQL. |
 | Order Service | 8081 | Creates and lists orders; verifies product details, reserves inventory, and writes order events to an outbox. |
-| Inventory Service | 8082 | Reads stock and atomically reserves inventory in PostgreSQL. |
+| Inventory Service | 8082 | Manages stock and atomically reserves inventory in PostgreSQL. |
 
 ### Main API endpoints
 
@@ -39,6 +39,7 @@ Requests below can be sent through the gateway at `http://localhost:9000`.
 | `DELETE` | `/api/products/{id}` | Delete a product. |
 | `GET` | `/api/inventory?skuCode={sku}` | Check stock for one or more SKU codes. Repeat `skuCode` to check multiple items. |
 | `GET` | `/api/inventory/{skuCode}` | Get stock for a SKU. |
+| `POST` | `/api/inventory/{skuCode}/stock` | Add stock for a SKU; send `{"quantity": 10}`. |
 | `PUT` | `/api/inventory/reduce-stock?skuCode={sku}&quantity={n}` | Reserve stock; provide an `Idempotency-Key` header. |
 | `GET` | `/api/orders` | List orders. |
 | `POST` | `/api/orders` | Place an order; provide an `Idempotency-Key` header. |
@@ -49,6 +50,10 @@ the key with a different product or quantity returns `409 Conflict`.
 Inventory reservations also use an idempotency key to prevent a duplicate
 reservation. Both order and inventory idempotency keys must be non-blank and
 at most 128 characters.
+
+Adding a catalog product does not create inventory. Use **Add stock** on its
+catalog row to receive units before placing an order; the order form shows
+available quantity and prevents selecting out-of-stock products.
 
 The Order Service saves confirmed orders and their outbox events atomically in
 PostgreSQL. A scheduled publisher claims pending outbox rows with

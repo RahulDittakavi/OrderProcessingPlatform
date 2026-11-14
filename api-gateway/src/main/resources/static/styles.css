@@ -84,10 +84,18 @@ h2 { margin-bottom: 0; font-family: Georgia, "Times New Roman", serif; font-size
 .product-name { display: block; overflow: hidden; max-width: 260px; font-weight: 700; text-overflow: ellipsis; }
 .product-description { display: block; overflow: hidden; max-width: 260px; margin-top: 4px; color: var(--muted); font-size: 11px; text-overflow: ellipsis; }
 .sku-text { color: #65736a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
-.stock-cell { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
-.stock-dot { width: 7px; height: 7px; border-radius: 50%; background: #aab4ac; }
-.stock-dot.in-stock { background: #42a076; }
-.stock-dot.low-stock { background: #d59a37; }
+.stock-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 999px; color: #536158; background: #edf0ec; font-size: 11px; font-weight: 700; }
+.stock-badge::before { width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #aab4ac; content: ""; }
+.stock-badge.in-stock { color: #246345; background: var(--soft-green); }
+.stock-badge.in-stock::before { background: #42a076; }
+.stock-badge.low-stock { color: #815b1e; background: #fbf1dc; }
+.stock-badge.low-stock::before { background: #d59a37; }
+.stock-badge.out-of-stock { color: #914333; background: var(--soft-red); }
+.stock-badge.out-of-stock::before { background: var(--coral); }
+.stock-badge.stock-unknown { color: var(--muted); }
+.stock-action { min-height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: 3px; color: var(--green); background: var(--surface); cursor: pointer; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.stock-action:hover { border-color: #b7c9bc; background: #f3f8f3; }
+.stock-action:focus-visible, .button:focus-visible, .refresh-button:focus-visible, .dialog-close:focus-visible { outline: 3px solid #b6d34c; outline-offset: 2px; }
 .table-message { height: 100px !important; color: var(--muted); text-align: center; }
 .order-panel { padding: 34px 0 30px 28px; border-left: 1px solid var(--line); }
 .order-panel h2 { margin-bottom: 8px; }
@@ -99,6 +107,8 @@ h2 { margin-bottom: 0; font-family: Georgia, "Times New Roman", serif; font-size
 .form-stack input:focus, .form-stack select:focus, .dialog-form input:focus, .dialog-form textarea:focus { border-color: #7ca48c; box-shadow: 0 0 0 3px #e0eee4; }
 .order-total { display: flex; align-items: center; justify-content: space-between; margin: 1px 0 18px; padding-top: 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .order-total strong { color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 20px; font-weight: 500; }
+.availability-note { min-height: 16px; margin: -10px 0 15px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.form-stack input:disabled, .form-stack select:disabled { color: #8b958d; background: #f2f4f0; cursor: not-allowed; }
 .form-feedback { min-height: 16px; margin: 9px 0 0; color: var(--coral); font-size: 11px; line-height: 1.4; }
 .orders-section { padding: 32px 0 38px; }
 .orders-table th, .orders-table td { padding-right: 20px; }
@@ -115,6 +125,8 @@ h2 { margin-bottom: 0; font-family: Georgia, "Times New Roman", serif; font-size
 .dialog-heading h2 { font-size: 24px; }
 .dialog-close { width: 32px; aspect-ratio: 1; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 24px; line-height: 1; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 3px; }
+.stock-dialog { width: min(400px, calc(100% - 28px)); }
+.stock-product-name { margin: -11px 0 22px; color: var(--muted); font-size: 12px; }
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 3; max-width: min(420px, calc(100vw - 32px)); padding: 13px 17px; color: white; background: var(--ink); box-shadow: 0 8px 28px #17221c35; font-size: 13px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: opacity 160ms ease, transform 160ms ease; }
 .toast.visible { opacity: 1; transform: translateY(0); }
 .toast.error { background: #8f3e30; }
@@ -124,6 +136,7 @@ h2 { margin-bottom: 0; font-family: Georgia, "Times New Roman", serif; font-size
   .work-grid { grid-template-columns: minmax(0, 1fr) 280px; }
   .catalog-section { padding-right: 20px; }
   .order-panel { padding-left: 20px; }
+  .product-table { min-width: 700px; }
   .product-table th, .product-table td { padding-right: 8px; }
 }
 @media (max-width: 700px) {

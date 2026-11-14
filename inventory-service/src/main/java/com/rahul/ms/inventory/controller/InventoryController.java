@@ -2,21 +2,25 @@ package com.rahul.ms.inventory.controller;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
 
 import com.rahul.ms.inventory.dto.InventoryResponse;
+import com.rahul.ms.inventory.dto.StockAdjustmentRequest;
 import com.rahul.ms.inventory.service.InventoryService;
 
 import lombok.RequiredArgsConstructor;
@@ -41,6 +45,13 @@ public class InventoryController {
     @ResponseStatus(HttpStatus.OK)
     public InventoryResponse checkStockBySku(@PathVariable("skuCode") String skuCode) {
         return inventoryService.checkStockBySku(skuCode);
+    }
+
+    @PostMapping("/{skuCode}/stock")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void addStock(@PathVariable("skuCode") @NotBlank String skuCode,
+                         @RequestBody @Valid StockAdjustmentRequest request) {
+        inventoryService.addStock(skuCode, request.quantity());
     }
 
     @PutMapping("/reduce-stock")

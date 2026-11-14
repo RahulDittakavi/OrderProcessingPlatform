@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.rahul.ms.inventory.dto.InventoryResponse;
+import com.rahul.ms.inventory.entity.Inventory;
 import com.rahul.ms.inventory.entity.InventoryReservation;
 import com.rahul.ms.inventory.repository.InventoryRepository;
 import com.rahul.ms.inventory.repository.InventoryReservationRepository;
@@ -50,7 +51,26 @@ public class InventoryService {
                         .availableQuantity(0)
                         .build());
     }
-   
+
+    @Transactional
+    public void addStock(String skuCode, int quantity) {
+        if (skuCode == null || skuCode.isBlank()) {
+            throw new IllegalArgumentException("SKU code is required");
+        }
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive");
+        }
+
+        int updatedRows = inventoryRepository.addStock(skuCode, quantity);
+        if (updatedRows == 0) {
+            inventoryRepository.save(Inventory.builder()
+                    .skuCode(skuCode)
+                    .quantity(quantity)
+                    .build());
+        }
+        log.info("Added {} units to inventory for skuCode={}", quantity, skuCode);
+    }
+
     @Transactional
     public void reduceStock(String reservationId, String skuCode, int quantity) {
         if (reservationId == null || reservationId.isBlank()) {

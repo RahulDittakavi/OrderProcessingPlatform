@@ -41,4 +41,14 @@ class InventoryServiceApplicationTests {
 		assertEquals(1, reservationRepository.count());
 	}
 
+	@Test
+	void stockCanBeAddedForNewAndExistingSkus() {
+		inventoryRepository.deleteAll();
+
+		inventoryService.addStock("new-sku", 4);
+		inventoryService.addStock("new-sku", 3);
+
+		assertEquals(7, inventoryRepository.findBySkuCode("new-sku").orElseThrow().getQuantity());
+	}
+
 }

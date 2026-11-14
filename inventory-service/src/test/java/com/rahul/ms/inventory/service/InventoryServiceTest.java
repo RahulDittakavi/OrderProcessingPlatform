@@ -79,6 +79,40 @@ class InventoryServiceTest {
     }
 
     @Test
+    void addsStockToExistingInventory() {
+        when(inventoryRepository.addStock("sku-1", 5)).thenReturn(1);
+
+        new InventoryService(inventoryRepository, reservationRepository).addStock("sku-1", 5);
+
+        verify(inventoryRepository).addStock("sku-1", 5);
+        verify(inventoryRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void createsInventoryWhenAddingStockForNewSku() {
+        new InventoryService(inventoryRepository, reservationRepository).addStock("sku-1", 5);
+
+        verify(inventoryRepository).save(argThat(inventory ->
+                inventory.getSkuCode().equals("sku-1") && inventory.getQuantity() == 5));
+    }
+
+    @Test
+    void rejectsNonPositiveStockAdditions() {
+        InventoryService service = new InventoryService(inventoryRepository, reservationRepository);
+
+        assertThrows(IllegalArgumentException.class, () -> service.addStock("sku-1", 0));
+        verifyNoInteractions(inventoryRepository);
+    }
+
+    @Test
+    void rejectsBlankSkuForStockAdditions() {
+        InventoryService service = new InventoryService(inventoryRepository, reservationRepository);
+
+        assertThrows(IllegalArgumentException.class, () -> service.addStock(" ", 5));
+        verifyNoInteractions(inventoryRepository);
+    }
+
+    @Test
     void rejectsReservationWhenNoRowsWereUpdated() {
         when(inventoryRepository.reserveStock("sku-1", 3)).thenReturn(0);
 
