@@ -54,11 +54,15 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
         register-health-indicator: true
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException$NotFound
   retry:
     instances:
       productService:
         max-attempts: 3
         wait-duration: 1s
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException$NotFound
   timelimiter:
     instances:
       productService:

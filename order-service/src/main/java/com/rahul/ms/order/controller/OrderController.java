@@ -47,6 +47,8 @@ public class OrderController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Place a new order")
     @ApiResponse(responseCode = "201", description = "Order placed successfully")
+    @ApiResponse(responseCode = "404", description = "Product not found")
+    @ApiResponse(responseCode = "503", description = "Product service unavailable")
     public OrderResponse placeOrder(
             @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 128) String idempotencyKey,
             @RequestBody @Valid OrderRequest orderRequest) {

@@ -15,6 +15,7 @@ import com.rahul.ms.order.dto.OrderResponse;
 import com.rahul.ms.order.entity.Order;
 import com.rahul.ms.order.entity.OrderStatus;
 import com.rahul.ms.order.exception.IdempotencyKeyConflictException;
+import com.rahul.ms.order.exception.ProductNotFoundException;
 import com.rahul.ms.order.repository.OrderRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -43,7 +44,7 @@ public class OrderService {
         var productResponse = productClient.getProductById(orderRequest.productId())
                 .orElseThrow(() -> {
                     log.warn("Unable to place order: product not found productId={}", orderRequest.productId());
-                    return new RuntimeException("Product not found with ID: " + orderRequest.productId());
+                    return new ProductNotFoundException("Product not found with ID: " + orderRequest.productId());
                 });
 
         var order = Order.builder()
@@ -133,7 +134,7 @@ public class OrderService {
                 .orElseThrow(() -> {
                     log.warn("Unable to resume pending order: product not found orderNumber={} productId={}",
                             order.getOrderNumber(), order.getProductId());
-                    return new RuntimeException("Product not found with ID: " + order.getProductId());
+                    return new ProductNotFoundException("Product not found with ID: " + order.getProductId());
                 });
         log.info("Resuming pending order orderNumber={}", order.getOrderNumber());
         order.setProductSkuCode(product.skuCode());

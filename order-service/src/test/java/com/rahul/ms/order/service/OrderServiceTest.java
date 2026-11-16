@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.rahul.ms.order.exception.IdempotencyKeyConflictException;
+import com.rahul.ms.order.exception.ProductNotFoundException;
 import com.rahul.ms.order.client.InventoryClient;
 import com.rahul.ms.order.client.ProductClient;
 import com.rahul.ms.order.dto.OrderRequest;
@@ -146,7 +147,7 @@ class OrderServiceTest {
     void doesNotReserveOrSaveWhenProductDoesNotExist() {
         when(productClient.getProductById("missing-product")).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class,
+        assertThrows(ProductNotFoundException.class,
                 () -> orderService.placeOrder(new OrderRequest("missing-product", 2, null), "request-123"));
 
         verifyNoInteractions(inventoryClient, orderPersistenceService);

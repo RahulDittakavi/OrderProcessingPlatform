@@ -1,12 +1,14 @@
 package com.rahul.ms.order.client;
 
 import com.rahul.ms.order.dto.ProductResponse;
+import com.rahul.ms.order.exception.ProductServiceUnavailableException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.Optional;
@@ -36,7 +38,12 @@ public class ProductClient {
     }
 
     public Optional<ProductResponse> getProductFallback(String productId, Throwable throwable) {
-        log.warn("Product service unavailable; fallback returned no product productId={}", productId, throwable);
-        return Optional.empty();
+        if (throwable instanceof HttpClientErrorException.NotFound) {
+            log.debug("Product not found productId={}", productId);
+            return Optional.empty();
+        }
+
+        log.error("Product service request failed productId={}", productId, throwable);
+        throw new ProductServiceUnavailableException("Product service is unavailable", throwable);
     }
 }
