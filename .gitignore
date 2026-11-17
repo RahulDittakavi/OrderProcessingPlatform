@@ -5,3 +5,5 @@ order-service/order-data/
 product-service/data/
 *.log
 .env
+/aws-deploy-pack/infra/terraform/tfplan
+/aws-deploy-pack/infra/terraform/terraform.tfvars.save
