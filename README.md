@@ -124,6 +124,31 @@ Stop this project's services and containers with:
 View service logs with `docker compose logs -f <service-name>` (for example,
 `docker compose logs -f order-service`).
 
+## Access AWS-hosted services
+
+The AWS deployment does not expose application ports to the public internet.
+Use AWS Systems Manager (SSM) port forwarding to open a local tunnel instead;
+this avoids relying on a fixed client IP or the EC2 public IP.
+
+Prerequisites: AWS CLI credentials for the account and region, the Session
+Manager plugin, and permission to start an SSM session to the EC2 instance
+using the `AWS-StartPortForwardingSession` document. Start the EC2 instance
+first if the nightly stop schedule has stopped it. From the repository root,
+run one tunnel command per service in a separate terminal:
+
+```bash
+./aws-deploy-pack/scripts/aws/ssm-tunnel.sh order-desk
+./aws-deploy-pack/scripts/aws/ssm-tunnel.sh grafana
+./aws-deploy-pack/scripts/aws/ssm-tunnel.sh prometheus
+./aws-deploy-pack/scripts/aws/ssm-tunnel.sh eureka
+```
+
+Open the corresponding local URLs while each tunnel is running:
+`http://localhost:9000/` (Order Desk), `http://localhost:3000/` (Grafana),
+`http://localhost:9090/` (Prometheus), and `http://localhost:8761/` (Eureka).
+Press Ctrl+C in a tunnel's terminal to close that connection. The helper reads
+the instance ID and region from the Terraform outputs.
+
 ### Health-check CLI
 
 The Go CLI checks the health endpoints of all five application services and

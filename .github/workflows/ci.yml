@@ -54,7 +54,7 @@ jobs:
           go test -race ./...
 
       - name: Check startup scripts
-        run: bash -n start-all.sh stop-all.sh
+        run: bash -n start-all.sh stop-all.sh aws-deploy-pack/scripts/aws/ssm-tunnel.sh
 
   verify:
     name: Build and test services

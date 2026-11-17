@@ -135,15 +135,15 @@ jobs:
           echo "Final status: $status"
           [ "$status" = "Success" ]
 
-      - name: Print URLs
+      - name: Print access instructions
         run: |
-          IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
-            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
           {
             echo "### Deployed ${DEPLOY_SHA::7}"
-            echo "- Order Desk: http://${IP}:9000/"
-            echo "- Grafana: http://${IP}:3000/"
-            echo "- Eureka: http://${IP}:8761/"
+            echo "Start a local tunnel from the repository root, then open its localhost URL:"
+            echo "- Order Desk: \`./aws-deploy-pack/scripts/aws/ssm-tunnel.sh order-desk\` then http://localhost:9000/"
+            echo "- Grafana: \`./aws-deploy-pack/scripts/aws/ssm-tunnel.sh grafana\` then http://localhost:3000/"
+            echo "- Prometheus: \`./aws-deploy-pack/scripts/aws/ssm-tunnel.sh prometheus\` then http://localhost:9090/"
+            echo "- Eureka: \`./aws-deploy-pack/scripts/aws/ssm-tunnel.sh eureka\` then http://localhost:8761/"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stop instance (optional)

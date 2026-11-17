@@ -14,30 +14,10 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 # ---------- Network: default VPC, no NAT gateway, no load balancer ----------
-locals {
-  app_ports = {
-    gateway    = 9000 # Order Desk UI + API
-    grafana    = 3000
-    eureka     = 8761
-    prometheus = 9090
-  }
-}
-
 resource "aws_security_group" "app" {
   name        = "${var.name_prefix}-sg"
-  description = "App ports restricted to owner IP. No SSH; use SSM."
+  description = "No public ingress; use SSM port forwarding."
   vpc_id      = data.aws_vpc.default.id
-
-  dynamic "ingress" {
-    for_each = local.app_ports
-    content {
-      description = ingress.key
-      from_port   = ingress.value
-      to_port     = ingress.value
-      protocol    = "tcp"
-      cidr_blocks = [var.allowed_cidr]
-    }
-  }
 
   egress {
     from_port   = 0
