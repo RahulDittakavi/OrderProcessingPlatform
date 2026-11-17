@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import com.rahul.ms.order.entity.OrderEventOutbox;
+import com.rahul.ms.order.entity.OutboxEventStatus;
 
 public interface OrderEventOutboxRepository extends JpaRepository<OrderEventOutbox, UUID> {
 
@@ -19,4 +20,6 @@ public interface OrderEventOutboxRepository extends JpaRepository<OrderEventOutb
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
     List<OrderEventOutbox> lockNextPendingEvents();
+
+    long countByStatus(OutboxEventStatus status);
 }
