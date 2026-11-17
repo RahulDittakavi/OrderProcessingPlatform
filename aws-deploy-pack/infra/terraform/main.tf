@@ -16,7 +16,7 @@ data "aws_ssm_parameter" "al2023_ami" {
 # ---------- Network: default VPC, no NAT gateway, no load balancer ----------
 resource "aws_security_group" "app" {
   name        = "${var.name_prefix}-sg"
-  description = "No public ingress; use SSM port forwarding."
+  description = "App ports, restricted to the owner IP. No SSH: use SSM."
   vpc_id      = data.aws_vpc.default.id
 
   egress {
