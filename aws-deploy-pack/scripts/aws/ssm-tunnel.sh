@@ -18,19 +18,23 @@ if ! command -v aws >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v terraform >/dev/null 2>&1; then
-  echo "Terraform is required to read the instance ID and region." >&2
-  exit 1
-fi
-
 if ! command -v session-manager-plugin >/dev/null 2>&1; then
   echo "The AWS Session Manager plugin is required to open an SSM tunnel." >&2
   exit 1
 fi
 
 terraform_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../infra/terraform" && pwd)"
-instance_id="$(terraform -chdir="$terraform_dir" output -raw instance_id)"
-region="$(terraform -chdir="$terraform_dir" output -raw aws_region)"
+instance_id="${INSTANCE_ID:-}"
+region="${AWS_REGION:-}"
+
+if [[ -z "$instance_id" || -z "$region" ]]; then
+  if ! command -v terraform >/dev/null 2>&1; then
+    echo "Set INSTANCE_ID and AWS_REGION, or install Terraform and use a local Terraform state." >&2
+    exit 1
+  fi
+  instance_id="${instance_id:-$(terraform -chdir="$terraform_dir" output -raw instance_id)}"
+  region="${region:-$(terraform -chdir="$terraform_dir" output -raw aws_region)}"
+fi
 
 echo "Forwarding localhost:${port} to ${service} on ${instance_id}; press Ctrl+C to stop."
 exec aws ssm start-session \

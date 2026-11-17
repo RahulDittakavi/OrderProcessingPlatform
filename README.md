@@ -147,7 +147,15 @@ Open the corresponding local URLs while each tunnel is running:
 `http://localhost:9000/` (Order Desk), `http://localhost:3000/` (Grafana),
 `http://localhost:9090/` (Prometheus), and `http://localhost:8761/` (Eureka).
 Press Ctrl+C in a tunnel's terminal to close that connection. The helper reads
-the instance ID and region from the Terraform outputs.
+the instance ID and region from local Terraform outputs when available. If your
+Terraform state is in AWS CloudShell, get those values there with
+`terraform output -raw instance_id` and `terraform output -raw aws_region`, then
+pass them to the helper on your computer, for example:
+
+```bash
+INSTANCE_ID=i-0123456789abcdef0 AWS_REGION=ap-southeast-2 \
+  ./aws-deploy-pack/scripts/aws/ssm-tunnel.sh order-desk
+```
 
 ### Health-check CLI
 
