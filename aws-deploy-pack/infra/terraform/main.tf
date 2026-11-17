@@ -18,6 +18,7 @@ resource "aws_security_group" "app" {
   name        = "${var.name_prefix}-sg"
   description = "App ports, restricted to the owner IP. No SSH: use SSM."
   vpc_id      = data.aws_vpc.default.id
+  ingress     = []
 
   egress {
     from_port   = 0
