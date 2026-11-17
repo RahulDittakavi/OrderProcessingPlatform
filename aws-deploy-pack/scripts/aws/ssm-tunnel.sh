@@ -32,8 +32,23 @@ if [[ -z "$instance_id" || -z "$region" ]]; then
     echo "Set INSTANCE_ID and AWS_REGION, or install Terraform and use a local Terraform state." >&2
     exit 1
   fi
-  instance_id="${instance_id:-$(terraform -chdir="$terraform_dir" output -raw instance_id)}"
-  region="${region:-$(terraform -chdir="$terraform_dir" output -raw aws_region)}"
+  if [[ -z "$instance_id" ]]; then
+    if ! instance_id="$(terraform -chdir="$terraform_dir" output -raw instance_id)"; then
+      echo "Could not read instance_id from Terraform state; set INSTANCE_ID explicitly." >&2
+      exit 1
+    fi
+  fi
+  if [[ -z "$region" ]]; then
+    if ! region="$(terraform -chdir="$terraform_dir" output -raw aws_region)"; then
+      echo "Could not read aws_region from Terraform state; set AWS_REGION explicitly." >&2
+      exit 1
+    fi
+  fi
+fi
+
+if [[ -z "$instance_id" || -z "$region" ]]; then
+  echo "Both INSTANCE_ID and AWS_REGION must be available to start the tunnel." >&2
+  exit 1
 fi
 
 echo "Forwarding localhost:${port} to ${service} on ${instance_id}; press Ctrl+C to stop."
