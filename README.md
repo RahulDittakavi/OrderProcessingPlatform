@@ -144,6 +144,9 @@ with `terraform output -json github_repo_variables`. After the workflow is
 updated and an OIDC deployment succeeds, remove the old
 `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` repository secrets. Terraform
 removes the old deployer IAM user when applied.
+Terraform intentionally ignores newer Amazon Linux AMI versions for the
+existing app instance so routine applies do not replace it; plan an AMI refresh
+as a separate maintenance change.
 
 The AWS deployment does not expose application ports to the public internet.
 Use AWS Systems Manager (SSM) port forwarding to open a local tunnel instead;

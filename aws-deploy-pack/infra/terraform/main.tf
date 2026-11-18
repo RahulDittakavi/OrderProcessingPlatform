@@ -68,6 +68,11 @@ resource "aws_instance" "app" {
   # Re-run user_data only if the script changes, not on every apply.
   user_data_replace_on_change = true
 
+  lifecycle {
+    # The SSM parameter tracks "latest"; routine applies must not replace the app host.
+    ignore_changes = [ami]
+  }
+
   metadata_options {
     http_tokens = "required" # IMDSv2 only
   }
