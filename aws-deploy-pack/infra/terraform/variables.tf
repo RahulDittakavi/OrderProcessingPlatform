@@ -9,6 +9,18 @@ variable "name_prefix" {
   default = "opp-poc"
 }
 
+variable "github_repository" {
+  description = "GitHub owner/repository allowed to assume the deploy role."
+  type        = string
+  default     = "RahulDittakavi/OrderProcessingPlatform"
+}
+
+variable "github_branch" {
+  description = "Repository branch allowed to assume the deploy role."
+  type        = string
+  default     = "main"
+}
+
 variable "instance_type" {
   description = "4 GB RAM minimum. If the account rejects it, pick another type from the EC2 console."
   type        = string

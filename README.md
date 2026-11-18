@@ -126,6 +126,25 @@ View service logs with `docker compose logs -f <service-name>` (for example,
 
 ## Access AWS-hosted services
 
+GitHub Actions uses OIDC to assume a short-lived AWS role; no AWS access keys
+are stored in GitHub. Before merging the workflow change, apply the Terraform
+in `aws-deploy-pack/infra/terraform` with an AWS identity that can manage IAM:
+
+```bash
+cd aws-deploy-pack/infra/terraform
+terraform init
+terraform apply
+terraform output -raw aws_deploy_role_arn
+```
+
+In the repository's **Settings > Secrets and variables > Actions > Variables**,
+set `AWS_DEPLOY_ROLE_ARN` to that output. The other required variables are
+`AWS_REGION`, `INSTANCE_ID`, and `ECR_REPOSITORY`; Terraform prints their values
+with `terraform output -json github_repo_variables`. After the workflow is
+updated and an OIDC deployment succeeds, remove the old
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` repository secrets. Terraform
+removes the old deployer IAM user when applied.
+
 The AWS deployment does not expose application ports to the public internet.
 Use AWS Systems Manager (SSM) port forwarding to open a local tunnel instead;
 this avoids relying on a fixed client IP or the EC2 public IP.
