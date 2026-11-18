@@ -83,6 +83,6 @@ resource "aws_instance" "app" {
   }
 
   lifecycle {
-  ignore_changes = [ami]
-}
+    ignore_changes = [ami]
+  }
 }
