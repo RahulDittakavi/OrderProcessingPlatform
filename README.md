@@ -32,15 +32,15 @@ It lets you:
 
 ```mermaid
 flowchart TB
-  user["Browser<br/>(SSM port-forward)"]
+  user["Browser<br/>SSM port-forward"]
 
-  subgraph ec2["EC2 t3.medium · Docker Compose network"]
-    gw["API gateway :9000<br/>Order Desk UI + routing"]
-    eureka["Eureka :8761<br/>service discovery"]
+  subgraph host["EC2 t3.medium · Docker Compose"]
+    gw["API gateway :9000<br/>Order Desk"]
+    eureka["Eureka :8761"]
     prod["Product :8080"]
     ord["Order :8081"]
     inv["Inventory :8082"]
-    kafka[["Kafka<br/>order-placed-topic"]]
+    kafka["Kafka<br/>order-placed-topic"]
     pg[("PostgreSQL 16<br/>productdb · orderdb · inventorydb")]
     prom["Prometheus :9090"]
     graf["Grafana :3000"]
@@ -50,46 +50,50 @@ flowchart TB
   gw -->|/api/products| prod
   gw -->|/api/orders| ord
   gw -->|/api/inventory| inv
-  gw -.lookup.-> eureka
+  gw -.-> eureka
 
   ord -->|REST via Eureka| prod
   ord -->|reserve stock| inv
-  ord -->|outbox publisher| kafka
+  ord -->|outbox events| kafka
 
   prod --> pg
   ord --> pg
   inv --> pg
 
-  prom -->|scrape /actuator/prometheus| gw & prod & ord & inv & eureka
+  prom --> gw
+  prom --> prod
+  prom --> ord
+  prom --> inv
+  prom --> eureka
   graf --> prom
 ```
 
 ### Delivery pipeline and infrastructure
 
 ```mermaid
-flowchart LR
-  dev["git push / pull request"]
+flowchart TB
+  dev["Developer<br/>push or pull request"]
 
   subgraph gha["GitHub Actions"]
-    ci["CI<br/>Maven verify x5 · Go checks · image build"]
-    cd["CD (AWS PoC)<br/>matrix build of 5 services"]
+    ci["CI<br/>Maven verify ×5 · Go checks · image build"]
+    cd["CD · AWS PoC<br/>build 5 service images"]
   end
 
-  subgraph aws["AWS ap-southeast-2 (managed by Terraform)"]
+  subgraph aws["AWS ap-southeast-2 · Terraform"]
     ecr[("Amazon ECR<br/>order-platform")]
-    ec2["EC2 t3.medium<br/>deploy.sh: pull · up --wait · rollback"]
-    sched["EventBridge Scheduler<br/>nightly stop 00:30 IST"]
+    ec2["EC2 t3.medium<br/>deploy.sh pulls, starts, health-checks<br/>and rolls back"]
+    sched["EventBridge Scheduler<br/>nightly stop · 00:30 IST"]
   end
 
-  ops["Developer laptop"]
+  ops["Developer laptop<br/>SSM tunnel"]
 
   dev --> ci
   ci -->|green on main| cd
   cd -->|push SHA-tagged images| ecr
   cd -->|SSM Run Command| ec2
-  ecr -->|docker pull| ec2
+  ecr -->|pull image| ec2
   sched -->|StopInstances| ec2
-  ops -->|SSM port-forward| ec2
+  ops -.->|SSM port-forward| ec2
 ```
 
 ### Design notes
