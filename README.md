@@ -26,6 +26,94 @@ It lets you:
 | Order Service | 8081 | Creates and lists orders; verifies product details, reserves inventory, and writes order events to an outbox. |
 | Inventory Service | 8082 | Manages stock and atomically reserves inventory in PostgreSQL. |
 
+## Architecture
+
+### Runtime
+
+```mermaid
+flowchart TB
+  user["Browser<br/>(SSM port-forward)"]
+
+  subgraph ec2["EC2 t3.medium · Docker Compose network"]
+    gw["API gateway :9000<br/>Order Desk UI + routing"]
+    eureka["Eureka :8761<br/>service discovery"]
+    prod["Product :8080"]
+    ord["Order :8081"]
+    inv["Inventory :8082"]
+    kafka[["Kafka<br/>order-placed-topic"]]
+    pg[("PostgreSQL 16<br/>productdb · orderdb · inventorydb")]
+    prom["Prometheus :9090"]
+    graf["Grafana :3000"]
+  end
+
+  user --> gw
+  gw -->|/api/products| prod
+  gw -->|/api/orders| ord
+  gw -->|/api/inventory| inv
+  gw -.lookup.-> eureka
+
+  ord -->|REST via Eureka| prod
+  ord -->|reserve stock| inv
+  ord -->|outbox publisher| kafka
+
+  prod --> pg
+  ord --> pg
+  inv --> pg
+
+  prom -->|scrape /actuator/prometheus| gw & prod & ord & inv & eureka
+  graf --> prom
+```
+
+### Delivery pipeline and infrastructure
+
+```mermaid
+flowchart LR
+  dev["git push / pull request"]
+
+  subgraph gha["GitHub Actions"]
+    ci["CI<br/>Maven verify x5 · Go checks · image build"]
+    cd["CD (AWS PoC)<br/>matrix build of 5 services"]
+  end
+
+  subgraph aws["AWS ap-southeast-2 (managed by Terraform)"]
+    ecr[("Amazon ECR<br/>order-platform")]
+    ec2["EC2 t3.medium<br/>deploy.sh: pull · up --wait · rollback"]
+    sched["EventBridge Scheduler<br/>nightly stop 00:30 IST"]
+  end
+
+  ops["Developer laptop"]
+
+  dev --> ci
+  ci -->|green on main| cd
+  cd -->|push SHA-tagged images| ecr
+  cd -->|SSM Run Command| ec2
+  ecr -->|docker pull| ec2
+  sched -->|StopInstances| ec2
+  ops -->|SSM port-forward| ec2
+```
+
+### Design notes
+
+- **No inbound ports:** The EC2 security group has no ingress rules. Deployments
+  use SSM Run Command, and developers access the services through SSM
+  port-forwarding with [`ssm-tunnel.sh`](aws-deploy-pack/scripts/aws/ssm-tunnel.sh).
+- **Service-to-service calls:** The Order Service calls Product and Inventory
+  directly through Eureka-discovered, load-balanced clients rather than through
+  the gateway.
+- **Transactional outbox:** Order confirmation and its outbox event are saved
+  in one transaction. A scheduled publisher sends events to Kafka with
+  at-least-once delivery.
+- **End-to-end idempotency:** Orders and inventory reservations use
+  idempotency keys so retries and replays do not double-reserve stock.
+- **Immutable deploys and rollback:** Images are tagged with the commit SHA.
+  `deploy.sh` waits for container health checks and redeploys the last known
+  good tag if the new deployment fails.
+- **Cost guardrails:** EventBridge stops the instance nightly. CD can also stop
+  the instance after a deployment.
+- **Deploy credentials:** CD uses a least-privilege IAM user scoped to one ECR
+  repository, one EC2 instance, and one SSM document. OIDC was designed but is
+  blocked by an organization SCP in this account.
+
 ### Main API endpoints
 
 Requests below can be sent through the gateway at `http://localhost:9000`.
