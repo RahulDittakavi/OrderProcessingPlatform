@@ -88,7 +88,10 @@ eureka:
 order:
   events:
     publisher-delay: ${ORDER_EVENTS_PUBLISHER_DELAY:5000}
-    max-retries: ${ORDER_EVENTS_MAX_RETRIES:5}
+    max-retries: ${ORDER_EVENTS_MAX_RETRIES:100}
+    retry:
+      initial-delay-ms: ${ORDER_EVENTS_RETRY_INITIAL_DELAY_MS:5000}
+      max-delay-ms: ${ORDER_EVENTS_RETRY_MAX_DELAY_MS:300000}
   reconciliation:
     delay-ms: ${ORDER_RECONCILIATION_DELAY_MS:60000}
     initial-delay-ms: ${ORDER_RECONCILIATION_INITIAL_DELAY_MS:60000}

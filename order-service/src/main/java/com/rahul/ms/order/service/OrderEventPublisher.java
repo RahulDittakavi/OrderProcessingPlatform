@@ -28,8 +28,14 @@ public class OrderEventPublisher {
     private final OrderEventOutboxRepository outboxRepository;
     private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
 
-    @Value("${order.events.max-retries:5}")
-    private int maxRetryCount = 5;
+    @Value("${order.events.max-retries:100}")
+    private int maxRetryCount = 100;
+
+    @Value("${order.events.retry.initial-delay-ms:5000}")
+    private long initialRetryDelayMs = 5000;
+
+    @Value("${order.events.retry.max-delay-ms:300000}")
+    private long maxRetryDelayMs = 300000;
 
     @Scheduled(
             fixedDelayString = "${order.events.publisher-delay:5000}",
@@ -50,6 +56,7 @@ public class OrderEventPublisher {
                     .get(5, TimeUnit.SECONDS);
             outbox.setStatus(OutboxEventStatus.SENT);
             outbox.setSentAt(Instant.now());
+            outbox.setNextAttemptAt(null);
             outboxRepository.save(outbox);
             var metadata = result.getRecordMetadata();
             log.info("Published order event aggregateId={} topic={} partition={} offset={}",
@@ -69,9 +76,20 @@ public class OrderEventPublisher {
         outbox.setRetryCount(outbox.getRetryCount() + 1);
         if (outbox.getRetryCount() >= maxRetryCount) {
             outbox.setStatus(OutboxEventStatus.FAILED);
+            outbox.setNextAttemptAt(null);
+        } else {
+            outbox.setNextAttemptAt(Instant.now().plusMillis(retryDelayMillis(outbox.getRetryCount())));
         }
         outboxRepository.save(outbox);
         log.error("Failed to publish order event aggregateId={} retryCount={} status={}",
                 outbox.getAggregateId(), outbox.getRetryCount(), outbox.getStatus(), exception);
+    }
+
+    private long retryDelayMillis(int retryCount) {
+        long delay = Math.min(initialRetryDelayMs, maxRetryDelayMs);
+        for (int attempt = 1; attempt < retryCount && delay < maxRetryDelayMs; attempt++) {
+            delay = delay > maxRetryDelayMs / 2 ? maxRetryDelayMs : delay * 2;
+        }
+        return delay;
     }
 }
