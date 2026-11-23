@@ -57,4 +57,7 @@ public class OrderEventOutbox {
 
     @Column(name = "sent_at")
     private Instant sentAt;
+
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
 }

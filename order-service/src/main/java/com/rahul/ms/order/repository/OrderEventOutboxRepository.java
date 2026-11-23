@@ -15,6 +15,7 @@ public interface OrderEventOutboxRepository extends JpaRepository<OrderEventOutb
             SELECT *
             FROM outbox_events
             WHERE status = 'PENDING'
+              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
             ORDER BY created_at ASC
             LIMIT 100
             FOR UPDATE SKIP LOCKED

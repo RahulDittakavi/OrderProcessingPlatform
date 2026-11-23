@@ -2,6 +2,9 @@ package com.rahul.ms.order.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -9,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -71,13 +75,14 @@ class OrderEventPublisherTest {
 
         assertEquals(OutboxEventStatus.PENDING, outbox.getStatus());
         assertEquals(1, outbox.getRetryCount());
+        assertRetryScheduledWithin(outbox.getNextAttemptAt(), 5);
         verify(outboxRepository).save(outbox);
     }
 
     @Test
-    void marksEventFailedWhenMaxRetryCountIsReached() {
+    void keepsEventRetryingUntilTheHigherMaxRetryCountIsReached() {
         OrderEventOutbox outbox = pendingEvent();
-        outbox.setRetryCount(4);
+        outbox.setRetryCount(99);
         when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
         when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
@@ -85,7 +90,8 @@ class OrderEventPublisherTest {
         publisher.publishPendingEvents();
 
         assertEquals(OutboxEventStatus.FAILED, outbox.getStatus());
-        assertEquals(5, outbox.getRetryCount());
+        assertEquals(100, outbox.getRetryCount());
+        assertNull(outbox.getNextAttemptAt());
         verify(outboxRepository).save(outbox);
     }
 
@@ -102,6 +108,34 @@ class OrderEventPublisherTest {
         verify(kafkaTemplate).send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class));
         assertEquals(1, failedEvent.getRetryCount());
         assertEquals(0, nextEvent.getRetryCount());
+    }
+
+    @Test
+    void doublesRetryDelayOnSubsequentFailures() {
+        OrderEventOutbox outbox = pendingEvent();
+        outbox.setRetryCount(1);
+        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
+
+        publisher.publishPendingEvents();
+
+        assertEquals(2, outbox.getRetryCount());
+        assertRetryScheduledWithin(outbox.getNextAttemptAt(), 10);
+    }
+
+    @Test
+    void capsRetryDelayAtFiveMinutes() {
+        OrderEventOutbox outbox = pendingEvent();
+        outbox.setRetryCount(6);
+        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
+
+        publisher.publishPendingEvents();
+
+        assertEquals(7, outbox.getRetryCount());
+        assertRetryScheduledWithin(outbox.getNextAttemptAt(), 300);
     }
 
     @Test
@@ -135,5 +169,12 @@ class OrderEventPublisherTest {
                 .status(OutboxEventStatus.PENDING)
                 .retryCount(0)
                 .build();
+    }
+
+    private void assertRetryScheduledWithin(Instant nextAttemptAt, long expectedDelaySeconds) {
+        assertNotNull(nextAttemptAt);
+        Instant now = Instant.now();
+        assertFalse(nextAttemptAt.isBefore(now.plusSeconds(expectedDelaySeconds - 1)));
+        assertTrue(nextAttemptAt.isBefore(now.plusSeconds(expectedDelaySeconds + 1)));
     }
 }

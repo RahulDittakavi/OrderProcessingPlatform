@@ -52,7 +52,7 @@ class OrderPostgresIntegrationTest {
     @Test
     void appliesMigrationsAndPersistsOrdersWithThePostgresSchema() {
         Integer appliedMigrations = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE version IN ('1', '2', '3') AND success",
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE version IN ('1', '2', '3', '4') AND success",
                 Integer.class);
         Integer skuColumnCount = jdbcTemplate.queryForObject(
                 """
@@ -68,7 +68,7 @@ class OrderPostgresIntegrationTest {
                 WHERE table_name = 'orders' AND column_name = 'created_at'
                 """,
                 Integer.class);
-        assertEquals(3, appliedMigrations);
+        assertEquals(4, appliedMigrations);
         assertEquals(1, skuColumnCount);
         assertEquals(1, createdAtColumnCount);
 
