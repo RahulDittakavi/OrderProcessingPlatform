@@ -14,13 +14,14 @@ public interface OrderEventOutboxRepository extends JpaRepository<OrderEventOutb
     @Query(value = """
             SELECT *
             FROM outbox_events
-            WHERE status = 'PENDING'
-              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
+            WHERE (status = 'PENDING'
+                   AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP))
+               OR (status = 'PROCESSING' AND next_attempt_at <= CURRENT_TIMESTAMP)
             ORDER BY created_at ASC
             LIMIT 100
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
-    List<OrderEventOutbox> lockNextPendingEvents();
+    List<OrderEventOutbox> lockNextAvailableEvents();
 
     long countByStatus(OutboxEventStatus status);
 }

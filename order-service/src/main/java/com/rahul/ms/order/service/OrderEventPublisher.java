@@ -1,16 +1,16 @@
 package com.rahul.ms.order.service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Value;
 
 import com.rahul.ms.order.entity.OrderEventOutbox;
 import com.rahul.ms.order.entity.OutboxEventStatus;
@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderEventPublisher {
 
     private final OrderEventOutboxRepository outboxRepository;
+    private final OrderEventOutboxClaimService claimService;
     private final KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
 
     @Value("${order.events.max-retries:100}")
@@ -40,10 +41,11 @@ public class OrderEventPublisher {
     @Scheduled(
             fixedDelayString = "${order.events.publisher-delay:5000}",
             initialDelayString = "${order.events.publisher.initial-delay:0}")
-    @Transactional
     public void publishPendingEvents() {
-        for (OrderEventOutbox outbox : outboxRepository.lockNextPendingEvents()) {
-            if (!publish(outbox)) {
+        List<OrderEventOutbox> events = claimService.claimNextEvents();
+        for (int index = 0; index < events.size(); index++) {
+            if (!publish(events.get(index))) {
+                releaseClaimedEvents(events.subList(index + 1, events.size()));
                 break;
             }
         }
@@ -68,7 +70,7 @@ public class OrderEventPublisher {
             return false;
         } catch (ExecutionException | TimeoutException | KafkaException exception) {
             recordFailure(outbox, exception);
-            return false;
+            return true;
         }
     }
 
@@ -78,11 +80,23 @@ public class OrderEventPublisher {
             outbox.setStatus(OutboxEventStatus.FAILED);
             outbox.setNextAttemptAt(null);
         } else {
+            outbox.setStatus(OutboxEventStatus.PENDING);
             outbox.setNextAttemptAt(Instant.now().plusMillis(retryDelayMillis(outbox.getRetryCount())));
         }
         outboxRepository.save(outbox);
         log.error("Failed to publish order event aggregateId={} retryCount={} status={}",
                 outbox.getAggregateId(), outbox.getRetryCount(), outbox.getStatus(), exception);
+    }
+
+    private void releaseClaimedEvents(List<OrderEventOutbox> events) {
+        if (events.isEmpty()) {
+            return;
+        }
+        for (OrderEventOutbox event : events) {
+            event.setStatus(OutboxEventStatus.PENDING);
+            event.setNextAttemptAt(null);
+        }
+        outboxRepository.saveAll(events);
     }
 
     private long retryDelayMillis(int retryCount) {

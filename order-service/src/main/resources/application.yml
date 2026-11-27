@@ -88,6 +88,7 @@ eureka:
 order:
   events:
     publisher-delay: ${ORDER_EVENTS_PUBLISHER_DELAY:5000}
+    claim-lease-ms: ${ORDER_EVENTS_CLAIM_LEASE_MS:1200000}
     max-retries: ${ORDER_EVENTS_MAX_RETRIES:100}
     retry:
       initial-delay-ms: ${ORDER_EVENTS_RETRY_INITIAL_DELAY_MS:5000}
