@@ -3,13 +3,10 @@ FROM maven:3.9.9-eclipse-temurin-21 AS build
 ARG SERVICE
 WORKDIR /workspace
 
-COPY ${SERVICE}/.mvn/ .mvn/
-COPY ${SERVICE}/mvnw ./mvnw
 COPY ${SERVICE}/pom.xml ./pom.xml
 COPY ${SERVICE}/src/ ./src/
 
-RUN chmod +x ./mvnw \
-    && ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+RUN mvn --batch-mode --no-transfer-progress -DskipTests package
 
 FROM eclipse-temurin:21-jre-jammy
 
