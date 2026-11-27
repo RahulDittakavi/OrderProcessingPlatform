@@ -87,11 +87,47 @@ public class OrderService {
             throw new InventoryReservationRejectedException(exception);
         }
 
-        order = orderPersistenceService.confirmAndEnqueue(order);
+        try {
+            order = orderPersistenceService.confirmAndEnqueue(order);
+        } catch (RuntimeException exception) {
+            compensateReservation(order, exception);
+            throw exception;
+        }
+
+        if (order.getStatus() != OrderStatus.CONFIRMED) {
+            var exception = new IllegalStateException(
+                    "Order was not confirmed after inventory reservation");
+            compensateReservation(order, exception);
+            throw exception;
+        }
 
         log.info("Order confirmed orderNumber={} productId={} quantity={}",
                 order.getOrderNumber(), order.getProductId(), order.getQuantity());
         return toResponse(order);
+    }
+
+    private void compensateReservation(Order order, RuntimeException cause) {
+        try {
+            inventoryClient.releaseStock(order.getOrderNumber());
+        } catch (RuntimeException releaseException) {
+            cause.addSuppressed(releaseException);
+            log.error("Failed to release inventory reservation after order confirmation failure orderNumber={}",
+                    order.getOrderNumber(), releaseException);
+            return;
+        }
+
+        if (order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.REJECTED);
+            try {
+                orderRepository.save(order);
+            } catch (RuntimeException persistenceException) {
+                cause.addSuppressed(persistenceException);
+                log.error("Failed to persist compensated order state orderNumber={}",
+                        order.getOrderNumber(), persistenceException);
+            }
+        }
+        log.warn("Released inventory reservation after order confirmation failure orderNumber={}",
+                order.getOrderNumber());
     }
 
     private OrderResponse replay(Order order, OrderRequest request) {
@@ -103,7 +139,7 @@ public class OrderService {
         }
         if (order.getStatus() == OrderStatus.REJECTED) {
             log.warn("Cannot replay rejected order orderNumber={}", order.getOrderNumber());
-            throw new IllegalArgumentException("Inventory reservation was rejected");
+            throw new IllegalArgumentException("Order was rejected and cannot be replayed");
         }
         if (order.getStatus() == OrderStatus.PENDING) {
             return resumePendingOrder(order);

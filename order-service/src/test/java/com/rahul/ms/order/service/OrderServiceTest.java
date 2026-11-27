@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import com.rahul.ms.order.exception.IdempotencyKeyConflictException;
 import com.rahul.ms.order.exception.ProductNotFoundException;
@@ -141,6 +142,52 @@ class OrderServiceTest {
         verify(orderRepository).save(any(Order.class));
         assertEquals(List.of(OrderStatus.PENDING), savedStatuses);
         verifyNoInteractions(orderPersistenceService);
+    }
+
+    @Test
+    void releasesReservationAndRejectsOrderWhenConfirmationPersistenceFails() {
+        List<OrderStatus> savedStatuses = new ArrayList<>();
+        when(productClient.getProductById("product-123")).thenReturn(Optional.of(
+                new ProductResponse("product-123", "sku-456", "Keyboard", "Mechanical keyboard",
+                        new BigDecimal("49.99"))));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order savedOrder = invocation.getArgument(0);
+            savedStatuses.add(savedOrder.getStatus());
+            return savedOrder;
+        });
+        RuntimeException persistenceFailure = new IllegalStateException("Outbox persistence failed");
+        when(orderPersistenceService.confirmAndEnqueue(any(Order.class))).thenThrow(persistenceFailure);
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> orderService.placeOrder(new OrderRequest("product-123", 2, null), "request-123"));
+
+        assertSame(persistenceFailure, thrown);
+        verify(inventoryClient).releaseStock(any(String.class));
+        assertEquals(List.of(OrderStatus.PENDING, OrderStatus.REJECTED), savedStatuses);
+    }
+
+    @Test
+    void leavesOrderPendingForReconciliationWhenReservationReleaseFails() {
+        List<OrderStatus> savedStatuses = new ArrayList<>();
+        when(productClient.getProductById("product-123")).thenReturn(Optional.of(
+                new ProductResponse("product-123", "sku-456", "Keyboard", "Mechanical keyboard",
+                        new BigDecimal("49.99"))));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order savedOrder = invocation.getArgument(0);
+            savedStatuses.add(savedOrder.getStatus());
+            return savedOrder;
+        });
+        RuntimeException persistenceFailure = new IllegalStateException("Outbox persistence failed");
+        RuntimeException releaseFailure = new IllegalStateException("Inventory service unavailable");
+        when(orderPersistenceService.confirmAndEnqueue(any(Order.class))).thenThrow(persistenceFailure);
+        doThrow(releaseFailure).when(inventoryClient).releaseStock(any(String.class));
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> orderService.placeOrder(new OrderRequest("product-123", 2, null), "request-123"));
+
+        assertSame(persistenceFailure, thrown);
+        assertEquals(List.of(releaseFailure), List.of(thrown.getSuppressed()));
+        assertEquals(List.of(OrderStatus.PENDING), savedStatuses);
     }
 
     @Test

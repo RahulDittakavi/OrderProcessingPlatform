@@ -115,7 +115,7 @@ Seed inventory, create a product, then place an order through `/api/orders`. Tra
 5. In one transaction, save the confirmed order and its outbox record.
 
 Try an order larger than available stock. Verify that the reservation fails and inspect whether the final state is consistent.
-If the reservation request times out, the order remains `PENDING` because the inventory result is unknown; reconciliation is a follow-up reliability task.
+If confirmation or outbox persistence fails after a successful reservation, order-service releases the reservation; if release fails, the order stays `PENDING` for reconciliation. If the reservation request times out, the order also remains `PENDING` because the inventory result is unknown.
 
 Learn: orchestration, synchronous service calls, transaction boundaries, and partial failure.
 
