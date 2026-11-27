@@ -4,6 +4,8 @@ ARG SERVICE
 WORKDIR /workspace
 
 COPY ${SERVICE}/pom.xml ./pom.xml
+RUN mvn --batch-mode --no-transfer-progress -DskipTests dependency:go-offline
+
 COPY ${SERVICE}/src/ ./src/
 
 RUN mvn --batch-mode --no-transfer-progress -DskipTests package
