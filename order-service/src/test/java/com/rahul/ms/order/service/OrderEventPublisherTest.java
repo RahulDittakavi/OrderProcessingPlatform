@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +40,9 @@ class OrderEventPublisherTest {
     private OrderEventOutboxRepository outboxRepository;
 
     @Mock
+    private OrderEventOutboxClaimService claimService;
+
+    @Mock
     private KafkaTemplate<String, OrderPlacedEvent> kafkaTemplate;
 
     @InjectMocks
@@ -46,10 +50,10 @@ class OrderEventPublisherTest {
 
     @Test
     void marksOutboxEventSentAfterKafkaAcknowledges() {
-        OrderEventOutbox outbox = pendingEvent();
+        OrderEventOutbox outbox = claimedEvent();
         SendResult<String, OrderPlacedEvent> sendResult = mock();
         RecordMetadata metadata = mock();
-        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(claimService.claimNextEvents()).thenReturn(List.of(outbox));
         when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
                 .thenReturn(CompletableFuture.completedFuture(sendResult));
         when(sendResult.getRecordMetadata()).thenReturn(metadata);
@@ -66,8 +70,8 @@ class OrderEventPublisherTest {
 
     @Test
     void incrementsRetryCountAndLeavesFailedEventPending() {
-        OrderEventOutbox outbox = pendingEvent();
-        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        OrderEventOutbox outbox = claimedEvent();
+        when(claimService.claimNextEvents()).thenReturn(List.of(outbox));
         when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
 
@@ -81,9 +85,9 @@ class OrderEventPublisherTest {
 
     @Test
     void keepsEventRetryingUntilTheHigherMaxRetryCountIsReached() {
-        OrderEventOutbox outbox = pendingEvent();
+        OrderEventOutbox outbox = claimedEvent();
         outbox.setRetryCount(99);
-        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(claimService.claimNextEvents()).thenReturn(List.of(outbox));
         when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
 
@@ -96,25 +100,49 @@ class OrderEventPublisherTest {
     }
 
     @Test
-    void stopsPublishingBatchAfterKafkaFailure() {
-        OrderEventOutbox failedEvent = pendingEvent();
-        OrderEventOutbox nextEvent = pendingEvent();
-        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(failedEvent, nextEvent));
+    void continuesPublishingBatchAfterKafkaFailure() {
+        OrderEventOutbox failedEvent = claimedEvent();
+        OrderEventOutbox nextEvent = claimedEvent();
+        when(claimService.claimNextEvents()).thenReturn(List.of(failedEvent, nextEvent));
         when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
 
         publisher.publishPendingEvents();
 
-        verify(kafkaTemplate).send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class));
+        verify(kafkaTemplate, times(2))
+                .send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class));
         assertEquals(1, failedEvent.getRetryCount());
-        assertEquals(0, nextEvent.getRetryCount());
+        assertEquals(1, nextEvent.getRetryCount());
+    }
+
+    @Test
+    void releasesUnprocessedClaimsWhenPublishingIsInterrupted() throws Exception {
+        OrderEventOutbox interruptedEvent = claimedEvent();
+        OrderEventOutbox unprocessedEvent = claimedEvent();
+        @SuppressWarnings("unchecked")
+        CompletableFuture<SendResult<String, OrderPlacedEvent>> interruptedFuture = mock(CompletableFuture.class);
+        when(claimService.claimNextEvents()).thenReturn(List.of(interruptedEvent, unprocessedEvent));
+        when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
+                .thenReturn(interruptedFuture);
+        when(interruptedFuture.get(5, TimeUnit.SECONDS)).thenThrow(new InterruptedException());
+
+        try {
+            publisher.publishPendingEvents();
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertEquals(OutboxEventStatus.PENDING, unprocessedEvent.getStatus());
+        assertNull(unprocessedEvent.getNextAttemptAt());
+        verify(kafkaTemplate).send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class));
+        verify(outboxRepository).saveAll(List.of(unprocessedEvent));
     }
 
     @Test
     void doublesRetryDelayOnSubsequentFailures() {
-        OrderEventOutbox outbox = pendingEvent();
+        OrderEventOutbox outbox = claimedEvent();
         outbox.setRetryCount(1);
-        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(claimService.claimNextEvents()).thenReturn(List.of(outbox));
         when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
 
@@ -126,9 +154,9 @@ class OrderEventPublisherTest {
 
     @Test
     void capsRetryDelayAtFiveMinutes() {
-        OrderEventOutbox outbox = pendingEvent();
+        OrderEventOutbox outbox = claimedEvent();
         outbox.setRetryCount(6);
-        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(claimService.claimNextEvents()).thenReturn(List.of(outbox));
         when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("Kafka unavailable")));
 
@@ -140,10 +168,10 @@ class OrderEventPublisherTest {
 
     @Test
     void incrementsRetryCountWhenKafkaAcknowledgementTimesOut() throws Exception {
-        OrderEventOutbox outbox = pendingEvent();
+        OrderEventOutbox outbox = claimedEvent();
         @SuppressWarnings("unchecked")
         CompletableFuture<SendResult<String, OrderPlacedEvent>> timedOutFuture = mock(CompletableFuture.class);
-        when(outboxRepository.lockNextPendingEvents()).thenReturn(List.of(outbox));
+        when(claimService.claimNextEvents()).thenReturn(List.of(outbox));
         when(kafkaTemplate.send(eq("order-placed-topic"), eq("order-123"), any(OrderPlacedEvent.class)))
                 .thenReturn(timedOutFuture);
         when(timedOutFuture.get(5, TimeUnit.SECONDS)).thenThrow(new TimeoutException("ack timeout"));
@@ -156,7 +184,7 @@ class OrderEventPublisherTest {
         verify(outboxRepository).save(outbox);
     }
 
-    private OrderEventOutbox pendingEvent() {
+    private OrderEventOutbox claimedEvent() {
         return OrderEventOutbox.builder()
                 .aggregateId("order-123")
                 .eventType("OrderPlaced")
@@ -166,7 +194,7 @@ class OrderEventPublisherTest {
                         .quantity(2)
                         .price(new BigDecimal("20.00"))
                         .build())
-                .status(OutboxEventStatus.PENDING)
+                .status(OutboxEventStatus.PROCESSING)
                 .retryCount(0)
                 .build();
     }
